@@ -11,9 +11,11 @@ import { createDeletePresetCommand } from './commands/preset/delete.js'
 import { createEditPresetCommand } from './commands/preset/edit.js'
 import { createListPresetsCommand } from './commands/preset/list.js'
 import { createShowPresetCommand } from './commands/preset/show.js'
+import { createRestoreCommand } from './commands/restore.js'
 import { createRunCommand } from './commands/run.js'
 import { InitApp } from './ink/init-app.js'
 import { PresetCreateApp } from './ink/preset-create-app.js'
+import { RestoreApp } from './ink/restore-app.js'
 import { toProcessEnvMap } from './core/process-env.js'
 import { spawnCommand } from './core/spawn.js'
 import { createConfigService } from './services/config-service.js'
@@ -81,6 +83,26 @@ program.command('init')
   )
 
 program.command('restore')
+  .option('-y, --yes')
+  .action((options) =>
+    createRestoreCommand({
+      historyService,
+      settingsEnvService,
+      presetService,
+      renderFlow: async (context) => {
+        render(h(RestoreApp))
+        const firstRecord = context.records[0]
+        return {
+          confirmed: context.yes && Boolean(firstRecord),
+          timestamp: firstRecord?.timestamp,
+          targetType: firstRecord?.targetType ?? 'settings',
+          targetName: firstRecord?.targetName,
+        }
+      },
+    })({
+      yes: options.yes,
+    }),
+  )
 
 const presetCommand = program.command('preset')
 presetCommand.command('list').action(
