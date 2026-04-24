@@ -27,22 +27,42 @@ const projectEnvService = createProjectEnvService({ cwd: process.cwd() })
 const runtimeEnvService = createRuntimeEnvService()
 const presetService = createPresetService(globalRoot)
 
+const runCommand = createRunCommand({
+  configService,
+  presetService,
+  envSources: async ({ preset: _preset, presetEnv }) => ({
+    settingsEnv: await settingsEnvService.read(),
+    processEnv: toProcessEnvMap(process.env),
+    presetEnv,
+    projectEnv: await projectEnvService.read(),
+  }),
+  runtimeEnvService,
+  spawnCommand,
+})
+
+program
+  .argument('[command]')
+  .argument('[args...]')
+  .option('-p, --preset <name>')
+  .option('--dry-run')
+  .action((command, args, options) => {
+    if (!command) {
+      return
+    }
+
+    return runCommand({
+      preset: options.preset,
+      dryRun: options.dryRun,
+      command,
+      args,
+    })
+  })
+
 program.command('run [command] [args...]')
   .option('-p, --preset <name>')
   .option('--dry-run')
   .action((command, args, options) =>
-    createRunCommand({
-      configService,
-      presetService,
-      envSources: async ({ preset: _preset, presetEnv }) => ({
-        settingsEnv: await settingsEnvService.read(),
-        processEnv: toProcessEnvMap(process.env),
-        presetEnv,
-        projectEnv: await projectEnvService.read(),
-      }),
-      runtimeEnvService,
-      spawnCommand,
-    })({
+    runCommand({
       preset: options.preset,
       dryRun: options.dryRun,
       command,
