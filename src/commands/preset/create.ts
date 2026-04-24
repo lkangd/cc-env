@@ -104,7 +104,7 @@ export function createPresetCreateCommand({
       }
 
       if (result?.destination === 'preset') {
-        await presetService.write('openai', env)
+        await presetService.write(name ?? 'openai', env)
       }
 
       return

@@ -131,18 +131,18 @@ describe('preset create flow', () => {
     ).toEqual(state)
   })
 
-  it('keeps a single selected source when select-source is repeated', () => {
-    const sourceState = advancePresetCreateFlow(createPresetCreateFlowState(), {
+  it('ignores select-source after leaving the source step', () => {
+    const keysState = advancePresetCreateFlow(createPresetCreateFlowState(), {
       type: 'select-source',
       source: 'process',
     })
 
     expect(
-      advancePresetCreateFlow(sourceState, {
+      advancePresetCreateFlow(keysState, {
         type: 'select-source',
         source: 'process',
       }),
-    ).toEqual(sourceState)
+    ).toEqual(keysState)
   })
 
   it('ignores changes after the flow is done', () => {

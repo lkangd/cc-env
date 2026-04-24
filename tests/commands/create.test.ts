@@ -141,7 +141,34 @@ describe('createPresetCreateCommand', () => {
     expect(projectEnvService.write).not.toHaveBeenCalled()
   })
 
-  it('uses selectedKeys from interactive preset results to build placeholder preset env', async () => {
+  it('uses the provided preset name for interactive preset writes', async () => {
+    const presetService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const projectEnvService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const renderFlow = vi.fn().mockResolvedValue({
+      destination: 'preset',
+      selectedSources: ['process'],
+      selectedKeys: ['UNRELATED_KEY'],
+    })
+
+    const createPreset = createPresetCreateCommand({
+      presetService,
+      projectEnvService,
+      renderFlow,
+    })
+
+    await createPreset({
+      name: 'custom',
+    })
+
+    expect(presetService.write).toHaveBeenCalledWith('custom', {})
+    expect(projectEnvService.write).not.toHaveBeenCalled()
+  })
+
+  it("falls back to 'openai' for interactive preset writes without a name", async () => {
     const presetService = {
       write: vi.fn().mockResolvedValue(undefined),
     }

@@ -44,45 +44,51 @@ export function advancePresetCreateFlow(
   state: PresetCreateFlowState,
   action: PresetCreateFlowAction,
 ): PresetCreateFlowState {
-  if (state.step === 'source' && action.type === 'select-source') {
-    if (state.selectedSources[0] === action.source) {
+  switch (state.step) {
+    case 'source':
+      if (action.type !== 'select-source') {
+        return state
+      }
+
+      return {
+        ...state,
+        step: 'keys',
+        selectedSources: [action.source],
+      }
+
+    case 'keys':
+      if (action.type !== 'select-keys') {
+        return state
+      }
+
+      return {
+        ...state,
+        step: 'destination',
+        selectedKeys: action.keys,
+      }
+
+    case 'destination':
+      if (action.type !== 'select-destination') {
+        return state
+      }
+
+      return {
+        ...state,
+        step: 'confirm',
+        destination: action.destination,
+      }
+
+    case 'confirm':
+      if (action.type !== 'confirm') {
+        return state
+      }
+
+      return {
+        ...state,
+        step: 'done',
+      }
+
+    case 'done':
       return state
-    }
-
-    return {
-      step: 'keys',
-      selectedSources: [action.source],
-      selectedKeys: state.selectedKeys,
-      destination: state.destination,
-    }
   }
-
-  if (state.step === 'keys' && action.type === 'select-keys') {
-    return {
-      step: 'destination',
-      selectedSources: state.selectedSources,
-      selectedKeys: action.keys,
-      destination: state.destination,
-    }
-  }
-
-  if (state.step === 'destination' && action.type === 'select-destination') {
-    return {
-      step: 'confirm',
-      selectedSources: state.selectedSources,
-      selectedKeys: state.selectedKeys,
-      destination: action.destination,
-    }
-  }
-
-  if (state.step === 'confirm' && action.type === 'confirm') {
-    return {
-      step: 'done',
-      selectedSources: state.selectedSources,
-      selectedKeys: state.selectedKeys,
-      destination: state.destination,
-    }
-  }
-
-  return state
 }
