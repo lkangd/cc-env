@@ -6,8 +6,8 @@ export const envMapSchema = z.record(envKeySchema, z.string())
 
 export const presetSchema = z.object({
   name: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  createdAt: z.string().datetime({ offset: true }),
+  updatedAt: z.string().datetime({ offset: true }),
   env: envMapSchema,
 })
 

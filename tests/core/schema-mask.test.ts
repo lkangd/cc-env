@@ -32,8 +32,17 @@ describe('sensitive masking', () => {
     expect(isSensitiveKey('ANTHROPIC_AUTH_TOKEN')).toBe(true)
   })
 
+  it('returns true for mixed-case sensitive suffixes', () => {
+    expect(isSensitiveKey('Anthropic_Auth_Token')).toBe(true)
+  })
+
   it('masks sensitive values', () => {
     expect(maskValue('ANTHROPIC_AUTH_TOKEN', 'sk-1234567890')).toBe('sk-123456********')
+  })
+
+  it('masks short sensitive values without exposing the original secret', () => {
+    expect(maskValue('ANTHROPIC_AUTH_TOKEN', 'short')).toBe('*****')
+    expect(maskValue('ANTHROPIC_AUTH_TOKEN', '12345678')).toBe('********')
   })
 
   it('leaves non-sensitive values unchanged', () => {
@@ -62,5 +71,18 @@ describe('presetSchema', () => {
         ANTHROPIC_AUTH_TOKEN: 'sk-1234567890',
       },
     })
+  })
+
+  it('rejects invalid ISO datetimes for createdAt and updatedAt', () => {
+    expect(() =>
+      presetSchema.parse({
+        name: 'default',
+        createdAt: 'not-a-date',
+        updatedAt: '2026-04-24',
+        env: {
+          API_URL: 'https://example.com',
+        },
+      }),
+    ).toThrow()
   })
 })
