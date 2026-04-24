@@ -1,9 +1,8 @@
 import { CliError } from '../core/errors.js'
-import type { EnvMap, Preset } from '../core/schema.js'
-import type { RestoreRecord } from '../flows/restore-flow.js'
+import type { EnvMap, HistoryRecord, Preset } from '../core/schema.js'
 
 type HistoryService = {
-  list: () => Promise<RestoreRecord[]>
+  list: () => Promise<HistoryRecord[]>
 }
 
 type SettingsEnvService = {
@@ -33,7 +32,7 @@ export function createRestoreCommand({
   settingsEnvService: SettingsEnvService
   presetService: PresetService
   renderFlow: (context: {
-    records: RestoreRecord[]
+    records: HistoryRecord[]
     yes: boolean
   }) => Promise<RestoreFlowResult | void> | RestoreFlowResult | void
 }) {

@@ -14,7 +14,7 @@ export function spawnCommand(
     })
 
     child.once('error', reject)
-    child.once('close', (exitCode, signal) => {
+    child.once('close', (exitCode: number | null, signal: NodeJS.Signals | null) => {
       if (signal) {
         reject(new CliError(`Command terminated by signal ${signal}`))
         return

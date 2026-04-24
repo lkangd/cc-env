@@ -1,15 +1,9 @@
-export type RestoreRecord = {
-  timestamp: string
-  action: 'init' | 'restore'
-  targetType: 'settings' | 'preset'
-  targetName: string
-  backup: Record<string, string>
-}
+import type { HistoryRecord } from '../core/schema.js'
 
 export type RestoreFlowStep = 'record' | 'target' | 'confirm' | 'done'
 
 type BaseRestoreFlowState = {
-  records: RestoreRecord[]
+  records: HistoryRecord[]
   selectedTimestamp?: string
 }
 
@@ -49,7 +43,7 @@ export type RestoreFlowAction =
       type: 'confirm'
     }
 
-export function createRestoreFlowState(records: RestoreRecord[]): RestoreFlowState {
+export function createRestoreFlowState(records: HistoryRecord[]): RestoreFlowState {
   return {
     step: 'record',
     records,
