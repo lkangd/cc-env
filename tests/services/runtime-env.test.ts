@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -53,6 +53,19 @@ describe('project env service', () => {
 
     await expect(service.read()).rejects.toThrowError(
       new CliError('Project env conflict: env.json and env.yaml both exist'),
+    )
+  })
+
+  it('creates env.json on first write when no project env file exists', async () => {
+    const root = await createTempRoot()
+    const service = createProjectEnvService({ cwd: root })
+
+    await expect(service.write({ OPENAI_API_KEY: 'sk-first-write' })).resolves.toEqual({
+      OPENAI_API_KEY: 'sk-first-write',
+    })
+
+    await expect(readFile(join(root, '.cc-env', 'env.json'), 'utf8')).resolves.toBe(
+      '{\n  "OPENAI_API_KEY": "sk-first-write"\n}\n',
     )
   })
 })
