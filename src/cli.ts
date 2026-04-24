@@ -15,6 +15,10 @@ import { createRestoreCommand } from './commands/restore.js'
 import { createRunCommand } from './commands/run.js'
 import { InitApp } from './ink/init-app.js'
 import { PresetCreateApp } from './ink/preset-create-app.js'
+import {
+  advanceRestoreFlow,
+  createRestoreFlowState,
+} from './flows/restore-flow.js'
 import { RestoreApp } from './ink/restore-app.js'
 import { toProcessEnvMap } from './core/process-env.js'
 import { spawnCommand } from './core/spawn.js'
@@ -39,17 +43,43 @@ const runtimeEnvService = createRuntimeEnvService()
 const presetService = createPresetService(globalRoot)
 const historyService = createHistoryService(globalRoot)
 
-function createMinimalRestoreResult(context: {
+function runRestoreFlow(context: {
   records: Awaited<ReturnType<typeof historyService.list>>
   yes: boolean
 }) {
+  const state = createRestoreFlowState(context.records)
   const firstRecord = context.records[0]
+  const selectedRecordState = firstRecord
+    ? advanceRestoreFlow(state, {
+        type: 'select-record',
+        timestamp: firstRecord.timestamp,
+      })
+    : state
+  const targetState = firstRecord
+    ? advanceRestoreFlow(selectedRecordState, {
+        type: 'select-target',
+        targetType: firstRecord.targetType,
+        targetName: firstRecord.targetName,
+      })
+    : selectedRecordState
+
+  render(h(RestoreApp, { state: context.yes ? targetState : state }))
+
+  if (!context.yes || !firstRecord || targetState.step !== 'confirm') {
+    return undefined
+  }
+
+  const doneState = advanceRestoreFlow(targetState, { type: 'confirm' })
+
+  if (doneState.step !== 'done') {
+    return undefined
+  }
 
   return {
-    confirmed: context.yes && Boolean(firstRecord),
-    timestamp: firstRecord?.timestamp,
-    targetType: firstRecord?.targetType ?? 'settings',
-    targetName: firstRecord?.targetName,
+    confirmed: true,
+    timestamp: doneState.selectedTimestamp,
+    targetType: doneState.targetType,
+    targetName: doneState.targetName,
   }
 }
 
@@ -103,10 +133,7 @@ program.command('restore')
       historyService,
       settingsEnvService,
       presetService,
-      renderFlow: async (context) => {
-        render(h(RestoreApp))
-        return createMinimalRestoreResult(context)
-      },
+      renderFlow: (context) => runRestoreFlow(context),
     })({
       yes: options.yes,
     }),

@@ -15,6 +15,20 @@ const restoreRecord = {
   },
 }
 
+function createConfirmState() {
+  const recordState = createRestoreFlowState([restoreRecord])
+  const targetState = advanceRestoreFlow(recordState, {
+    type: 'select-record',
+    timestamp: restoreRecord.timestamp,
+  })
+
+  return advanceRestoreFlow(targetState, {
+    type: 'select-target',
+    targetType: 'preset',
+    targetName: restoreRecord.targetName,
+  })
+}
+
 describe('restore flow', () => {
   it('starts on the record step', () => {
     expect(createRestoreFlowState([restoreRecord])).toEqual({
@@ -50,16 +64,7 @@ describe('restore flow', () => {
   })
 
   it('moves through target, confirm, and done after selecting a record', () => {
-    const recordState = createRestoreFlowState([restoreRecord])
-    const targetState = advanceRestoreFlow(recordState, {
-      type: 'select-record',
-      timestamp: restoreRecord.timestamp,
-    })
-    const confirmState = advanceRestoreFlow(targetState, {
-      type: 'select-target',
-      targetType: 'preset',
-      targetName: restoreRecord.targetName,
-    })
+    const confirmState = createConfirmState()
 
     expect(confirmState).toEqual({
       step: 'confirm',
@@ -75,5 +80,134 @@ describe('restore flow', () => {
       targetType: 'preset',
       targetName: restoreRecord.targetName,
     })
+  })
+
+  it('ignores later-step actions while still on the record step', () => {
+    const state = createRestoreFlowState([restoreRecord])
+
+    expect(
+      advanceRestoreFlow(state, {
+        type: 'select-target',
+        targetType: 'settings',
+      }),
+    ).toEqual(state)
+    expect(advanceRestoreFlow(state, { type: 'confirm' })).toEqual(state)
+  })
+
+  it('ignores record and confirm actions while on the target step', () => {
+    const targetState = advanceRestoreFlow(createRestoreFlowState([restoreRecord]), {
+      type: 'select-record',
+      timestamp: restoreRecord.timestamp,
+    })
+
+    expect(
+      advanceRestoreFlow(targetState, {
+        type: 'select-record',
+        timestamp: restoreRecord.timestamp,
+      }),
+    ).toEqual(targetState)
+    expect(advanceRestoreFlow(targetState, { type: 'confirm' })).toEqual(targetState)
+  })
+
+  it('requires a preset target name before moving to confirm', () => {
+    const targetState = advanceRestoreFlow(createRestoreFlowState([restoreRecord]), {
+      type: 'select-record',
+      timestamp: restoreRecord.timestamp,
+    })
+
+    expect(
+      advanceRestoreFlow(targetState, {
+        type: 'select-target',
+        targetType: 'preset',
+      }),
+    ).toEqual(targetState)
+  })
+
+  it('clears stale targetName when selecting settings', () => {
+    const targetState = advanceRestoreFlow(createRestoreFlowState([restoreRecord]), {
+      type: 'select-record',
+      timestamp: restoreRecord.timestamp,
+    })
+
+    expect(
+      advanceRestoreFlow(targetState, {
+        type: 'select-target',
+        targetType: 'settings',
+        targetName: restoreRecord.targetName,
+      }),
+    ).toEqual({
+      step: 'confirm',
+      records: [restoreRecord],
+      selectedTimestamp: restoreRecord.timestamp,
+      targetType: 'settings',
+      targetName: undefined,
+    })
+  })
+
+  it('ignores non-confirm actions while on the confirm step', () => {
+    const confirmState = createConfirmState()
+
+    expect(
+      advanceRestoreFlow(confirmState, {
+        type: 'select-record',
+        timestamp: restoreRecord.timestamp,
+      }),
+    ).toEqual(confirmState)
+    expect(
+      advanceRestoreFlow(confirmState, {
+        type: 'select-target',
+        targetType: 'settings',
+      }),
+    ).toEqual(confirmState)
+  })
+
+  it('does not finish without a selected target', () => {
+    const invalidConfirmState = {
+      ...advanceRestoreFlow(createRestoreFlowState([restoreRecord]), {
+        type: 'select-record',
+        timestamp: restoreRecord.timestamp,
+      }),
+      step: 'confirm' as const,
+      targetType: undefined,
+      targetName: undefined,
+    }
+
+    expect(advanceRestoreFlow(invalidConfirmState, { type: 'confirm' })).toEqual(
+      invalidConfirmState,
+    )
+  })
+
+  it('does not finish preset confirmation without a preset name', () => {
+    const invalidConfirmState = {
+      ...advanceRestoreFlow(createRestoreFlowState([restoreRecord]), {
+        type: 'select-record',
+        timestamp: restoreRecord.timestamp,
+      }),
+      step: 'confirm' as const,
+      targetType: 'preset' as const,
+      targetName: undefined,
+    }
+
+    expect(advanceRestoreFlow(invalidConfirmState, { type: 'confirm' })).toEqual(
+      invalidConfirmState,
+    )
+  })
+
+  it('keeps the done step unchanged for any later action', () => {
+    const doneState = advanceRestoreFlow(createConfirmState(), { type: 'confirm' })
+
+    expect(
+      advanceRestoreFlow(doneState, {
+        type: 'select-record',
+        timestamp: restoreRecord.timestamp,
+      }),
+    ).toEqual(doneState)
+    expect(
+      advanceRestoreFlow(doneState, {
+        type: 'select-target',
+        targetType: 'settings',
+      }),
+    ).toEqual(doneState)
+    expect(advanceRestoreFlow(doneState, { type: 'confirm' })).toEqual(doneState)
   })
 })

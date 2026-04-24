@@ -62,7 +62,11 @@ export function advanceRestoreFlow(
       }
 
     case 'target':
-      if (action.type !== 'select-target') {
+      if (action.type !== 'select-target' || !state.selectedTimestamp) {
+        return state
+      }
+
+      if (action.targetType === 'preset' && !action.targetName) {
         return state
       }
 
@@ -70,11 +74,15 @@ export function advanceRestoreFlow(
         ...state,
         step: 'confirm',
         targetType: action.targetType,
-        targetName: action.targetName,
+        targetName: action.targetType === 'preset' ? action.targetName : undefined,
       }
 
     case 'confirm':
-      if (action.type !== 'confirm') {
+      if (action.type !== 'confirm' || !state.selectedTimestamp || !state.targetType) {
+        return state
+      }
+
+      if (state.targetType === 'preset' && !state.targetName) {
         return state
       }
 
