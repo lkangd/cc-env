@@ -12,16 +12,7 @@ type HistoryEntry = RestoreRecord
 export function createHistoryService(globalRoot: string) {
   return {
     async write(record: HistoryEntry): Promise<HistoryEntry> {
-      const parsed = historySchema.parse({
-        action: record.action,
-        targetType: record.targetType,
-      })
-      const stored: HistoryEntry = {
-        ...parsed,
-        targetName: record.targetName,
-        timestamp: record.timestamp,
-        backup: record.backup,
-      }
+      const stored = historySchema.parse(record) as HistoryEntry
       const filePath = resolveHistoryPath(globalRoot, stored.timestamp)
       await ensureParentDir(filePath)
 
@@ -48,15 +39,7 @@ export function createHistoryService(globalRoot: string) {
           }),
         )
 
-        return records.map((record) => ({
-          ...historySchema.parse({
-            action: record.action,
-            targetType: record.targetType,
-          }),
-          targetName: record.targetName,
-          timestamp: record.timestamp,
-          backup: record.backup,
-        }))
+        return records.map((record) => historySchema.parse(record) as HistoryEntry)
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
           return []

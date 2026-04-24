@@ -14,8 +14,18 @@ export function spawnCommand(
     })
 
     child.once('error', reject)
-    child.once('close', (exitCode) => {
-      if (exitCode && exitCode !== 0) {
+    child.once('close', (exitCode, signal) => {
+      if (signal) {
+        reject(new CliError(`Command terminated by signal ${signal}`))
+        return
+      }
+
+      if (exitCode === null) {
+        reject(new CliError('Command terminated without an exit code'))
+        return
+      }
+
+      if (exitCode !== 0) {
         reject(new CliError(`Command exited with code ${exitCode}`, exitCode))
         return
       }

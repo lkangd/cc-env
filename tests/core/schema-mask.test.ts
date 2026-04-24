@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { maskValue, isSensitiveKey } from '../../src/core/mask.js'
-import { envMapSchema, presetSchema } from '../../src/core/schema.js'
+import { envMapSchema, historySchema, presetSchema } from '../../src/core/schema.js'
 
 describe('envMapSchema', () => {
   it('accepts uppercase flat string maps', () => {
@@ -47,6 +47,46 @@ describe('sensitive masking', () => {
 
   it('leaves non-sensitive values unchanged', () => {
     expect(maskValue('API_URL', 'https://example.com')).toBe('https://example.com')
+  })
+})
+
+describe('historySchema', () => {
+  it('validates the full restore history shape including init-only movedKeys', () => {
+    const result = historySchema.parse({
+      timestamp: '2026-04-24T12:00:00.000Z',
+      action: 'init',
+      movedKeys: ['OPENAI_API_KEY'],
+      backup: {
+        OPENAI_API_KEY: 'sk-1234567890',
+      },
+      targetType: 'preset',
+      targetName: 'default',
+    })
+
+    expect(result).toEqual({
+      timestamp: '2026-04-24T12:00:00.000Z',
+      action: 'init',
+      movedKeys: ['OPENAI_API_KEY'],
+      backup: {
+        OPENAI_API_KEY: 'sk-1234567890',
+      },
+      targetType: 'preset',
+      targetName: 'default',
+    })
+  })
+
+  it('rejects init history without movedKeys', () => {
+    expect(() =>
+      historySchema.parse({
+        timestamp: '2026-04-24T12:00:00.000Z',
+        action: 'init',
+        backup: {
+          OPENAI_API_KEY: 'sk-1234567890',
+        },
+        targetType: 'preset',
+        targetName: 'default',
+      }),
+    ).toThrow()
   })
 })
 

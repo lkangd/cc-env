@@ -136,4 +136,23 @@ describe('history service', () => {
       },
     ])
   })
+
+  it('validates, stores, and returns the full history shape used by restore logic', async () => {
+    const globalRoot = await createTempRoot()
+    const service = createHistoryService(globalRoot)
+
+    const record = {
+      action: 'init' as const,
+      targetType: 'preset' as const,
+      targetName: 'openai',
+      timestamp: '2026-04-24T12:34:56.000Z',
+      movedKeys: ['OPENAI_API_KEY'],
+      backup: {
+        OPENAI_API_KEY: 'sk-123',
+      },
+    }
+
+    await expect(service.write(record as Parameters<typeof service.write>[0])).resolves.toEqual(record)
+    await expect(service.list()).resolves.toEqual([record])
+  })
 })

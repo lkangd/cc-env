@@ -11,10 +11,22 @@ export const presetSchema = z.object({
   env: envMapSchema,
 })
 
-export const historySchema = z.object({
-  action: z.enum(['init', 'restore']),
+const historyBaseSchema = z.object({
+  timestamp: z.string().datetime({ offset: true }),
+  backup: envMapSchema,
   targetType: z.enum(['settings', 'preset']),
+  targetName: z.string(),
 })
+
+export const historySchema = z.discriminatedUnion('action', [
+  historyBaseSchema.extend({
+    action: z.literal('init'),
+    movedKeys: z.array(envKeySchema),
+  }),
+  historyBaseSchema.extend({
+    action: z.literal('restore'),
+  }),
+])
 
 export const configSchema = z.object({
   defaultPreset: z.string().optional(),
