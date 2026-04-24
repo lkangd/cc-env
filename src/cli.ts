@@ -1,11 +1,17 @@
+import React from 'react'
+import { render } from 'ink'
 import { Command } from 'commander'
 
+const h = React.createElement
+
 import { createDebugCommand } from './commands/debug.js'
+import { createPresetCreateCommand } from './commands/preset/create.js'
 import { createDeletePresetCommand } from './commands/preset/delete.js'
 import { createEditPresetCommand } from './commands/preset/edit.js'
 import { createListPresetsCommand } from './commands/preset/list.js'
 import { createShowPresetCommand } from './commands/preset/show.js'
 import { createRunCommand } from './commands/run.js'
+import { PresetCreateApp } from './ink/preset-create-app.js'
 import { toProcessEnvMap } from './core/process-env.js'
 import { spawnCommand } from './core/spawn.js'
 import { createConfigService } from './services/config-service.js'
@@ -67,6 +73,34 @@ presetCommand.command('delete <name>').action(
 presetCommand.command('edit <name>').action(
   createEditPresetCommand({ presetService }),
 )
+presetCommand.command('create [pairs...]')
+  .option('-n, --name <name>')
+  .option('-f, --file <path>')
+  .option('--project')
+  .action((pairs, options) =>
+    createPresetCreateCommand({
+      presetService,
+      projectEnvService,
+      renderFlow: async (context) => {
+        let result: { destination: 'project' | 'preset' } | undefined
+        const app = render(
+          h(PresetCreateApp, {
+            onSubmit: (value) => {
+              result = value
+            },
+          }),
+        )
+
+        await app.waitUntilExit()
+        return result
+      },
+    })({
+      name: options.name,
+      file: options.file,
+      pairs,
+      project: options.project,
+    }),
+  )
 
 program.command('debug').action(
   createDebugCommand({

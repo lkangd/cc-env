@@ -25,10 +25,14 @@ type CreatePresetOptions = {
 type RenderFlowContext = Required<Pick<CreatePresetOptions, 'pairs' | 'project'>>
   & Pick<CreatePresetOptions, 'name' | 'file'>
 
+type InteractivePresetCreateResult = {
+  destination: 'project' | 'preset'
+}
+
 type CreatePresetCreateCommandOptions = {
   presetService: PresetService
   projectEnvService: ProjectEnvService
-  renderFlow: (context: RenderFlowContext) => Promise<unknown> | unknown
+  renderFlow: (context: RenderFlowContext) => Promise<InteractivePresetCreateResult | void> | InteractivePresetCreateResult | void
 }
 
 export function parseInlinePairs(pairs: string[]): EnvMap {
@@ -80,7 +84,20 @@ export function createPresetCreateCommand({
     }
 
     if (!file && pairs.length === 0) {
-      await renderFlow(context)
+      const result = await renderFlow(context)
+      const env = {
+        ANTHROPIC_BASE_URL: 'https://api.openai.com',
+      } satisfies EnvMap
+
+      if (result?.destination === 'project') {
+        await projectEnvService.write(env)
+        return
+      }
+
+      if (result?.destination === 'preset') {
+        await presetService.write('openai', env)
+      }
+
       return
     }
 
