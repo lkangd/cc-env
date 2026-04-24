@@ -13,4 +13,15 @@ describe('cc-env CLI help', () => {
     expect(stdout).toContain('preset')
     expect(stdout).toContain('debug')
   })
+
+  it('shows the preset subcommands in help output', async () => {
+    const { stdout } = await execa('npx', ['tsx', 'src/cli.ts', 'preset', '--help'], {
+      cwd: '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1',
+    })
+
+    expect(stdout).toContain('list')
+    expect(stdout).toContain('show <name>')
+    expect(stdout).toContain('delete <name>')
+    expect(stdout).toContain('edit <name>')
+  })
 })

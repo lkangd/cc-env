@@ -1,6 +1,9 @@
 import { Command } from 'commander'
 
 import { createDebugCommand } from './commands/debug.js'
+import { createDeletePresetCommand } from './commands/preset/delete.js'
+import { createEditPresetCommand } from './commands/preset/edit.js'
+import { createListPresetsCommand } from './commands/preset/list.js'
 import { createShowPresetCommand } from './commands/preset/show.js'
 import { createPresetService } from './services/preset-service.js'
 import { createProjectEnvService } from './services/project-env-service.js'
@@ -24,8 +27,17 @@ const runtimeEnvService = createRuntimeEnvService()
 const presetService = createPresetService(globalRoot)
 
 const presetCommand = program.command('preset')
+presetCommand.command('list').action(
+  createListPresetsCommand({ presetService }),
+)
 presetCommand.command('show <name>').action(
   createShowPresetCommand({ presetService }),
+)
+presetCommand.command('delete <name>').action(
+  createDeletePresetCommand({ presetService }),
+)
+presetCommand.command('edit <name>').action(
+  createEditPresetCommand({ presetService }),
 )
 
 program.command('debug').action(

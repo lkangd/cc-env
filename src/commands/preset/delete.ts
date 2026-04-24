@@ -9,5 +9,6 @@ export function createDeletePresetCommand({
 }) {
   return async function deletePreset(name: string): Promise<void> {
     await presetService.remove(name)
+    console.log(`Deleted preset: ${name}`)
   }
 }
