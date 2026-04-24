@@ -37,8 +37,13 @@ describe('createInitCommand', () => {
       keys: ['OPENAI_API_KEY', 'BASE_URL'],
       yes: false,
     })
-    expect(presetService.write).toHaveBeenCalledWith('openai', {
-      OPENAI_API_KEY: 'sk-123',
+    expect(presetService.write).toHaveBeenCalledWith({
+      name: 'openai',
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+      env: {
+        OPENAI_API_KEY: 'sk-123',
+      },
     })
     expect(historyService.write).toHaveBeenCalledWith({
       timestamp: expect.any(String),

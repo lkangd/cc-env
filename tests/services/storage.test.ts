@@ -119,6 +119,9 @@ describe('history service', () => {
       targetType: 'preset',
       targetName: 'openai',
       timestamp: '2026-04-24T12:34:56.000Z',
+      backup: {
+        OPENAI_API_KEY: 'sk-123',
+      },
     })
 
     await expect(service.list()).resolves.toEqual([
@@ -127,6 +130,9 @@ describe('history service', () => {
         targetType: 'preset',
         targetName: 'openai',
         timestamp: '2026-04-24T12:34:56.000Z',
+        backup: {
+          OPENAI_API_KEY: 'sk-123',
+        },
       },
     ])
   })

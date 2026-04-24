@@ -1,12 +1,11 @@
 import spawn from 'cross-spawn'
 
 import { CliError } from './errors.js'
-import type { EnvMap } from './schema.js'
 
 export function spawnCommand(
   command: string,
   args: string[],
-  env: NodeJS.ProcessEnv & EnvMap,
+  env: NodeJS.ProcessEnv,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {

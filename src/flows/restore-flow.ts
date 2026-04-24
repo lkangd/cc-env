@@ -8,13 +8,32 @@ export type RestoreRecord = {
 
 export type RestoreFlowStep = 'record' | 'target' | 'confirm' | 'done'
 
-export type RestoreFlowState = {
-  step: RestoreFlowStep
+type BaseRestoreFlowState = {
   records: RestoreRecord[]
   selectedTimestamp?: string
-  targetType?: 'settings' | 'preset'
-  targetName?: string
 }
+
+export type RestoreFlowState =
+  | ({ step: 'record' } & BaseRestoreFlowState)
+  | ({ step: 'target'; selectedTimestamp: string } & BaseRestoreFlowState)
+  | ({ step: 'confirm'; selectedTimestamp: string } & BaseRestoreFlowState & (
+      | {
+          targetType: 'settings'
+        }
+      | {
+          targetType: 'preset'
+          targetName: string
+        }
+    ))
+  | ({ step: 'done'; selectedTimestamp: string } & BaseRestoreFlowState & (
+      | {
+          targetType: 'settings'
+        }
+      | {
+          targetType: 'preset'
+          targetName: string
+        }
+    ))
 
 export type RestoreFlowAction =
   | {
@@ -70,11 +89,21 @@ export function advanceRestoreFlow(
         return state
       }
 
+      if (action.targetType === 'settings') {
+        return {
+          ...state,
+          step: 'confirm',
+          targetType: 'settings',
+        }
+      }
+
+      const targetName = action.targetName as string
+
       return {
         ...state,
         step: 'confirm',
-        targetType: action.targetType,
-        targetName: action.targetType === 'preset' ? action.targetName : undefined,
+        targetType: 'preset',
+        targetName,
       }
 
     case 'confirm':

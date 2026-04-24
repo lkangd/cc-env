@@ -140,7 +140,6 @@ describe('restore flow', () => {
       records: [restoreRecord],
       selectedTimestamp: restoreRecord.timestamp,
       targetType: 'settings',
-      targetName: undefined,
     })
   })
 
@@ -161,36 +160,35 @@ describe('restore flow', () => {
     ).toEqual(confirmState)
   })
 
-  it('does not finish without a selected target', () => {
+  it('does not finish with a structurally invalid confirm state', () => {
     const invalidConfirmState = {
-      ...advanceRestoreFlow(createRestoreFlowState([restoreRecord]), {
-        type: 'select-record',
-        timestamp: restoreRecord.timestamp,
-      }),
       step: 'confirm' as const,
-      targetType: undefined,
-      targetName: undefined,
+      records: [restoreRecord],
+      selectedTimestamp: restoreRecord.timestamp,
     }
 
-    expect(advanceRestoreFlow(invalidConfirmState, { type: 'confirm' })).toEqual(
-      invalidConfirmState,
-    )
+    expect(
+      advanceRestoreFlow(
+        invalidConfirmState as unknown as Parameters<typeof advanceRestoreFlow>[0],
+        { type: 'confirm' },
+      ),
+    ).toEqual(invalidConfirmState)
   })
 
   it('does not finish preset confirmation without a preset name', () => {
     const invalidConfirmState = {
-      ...advanceRestoreFlow(createRestoreFlowState([restoreRecord]), {
-        type: 'select-record',
-        timestamp: restoreRecord.timestamp,
-      }),
       step: 'confirm' as const,
+      records: [restoreRecord],
+      selectedTimestamp: restoreRecord.timestamp,
       targetType: 'preset' as const,
-      targetName: undefined,
     }
 
-    expect(advanceRestoreFlow(invalidConfirmState, { type: 'confirm' })).toEqual(
-      invalidConfirmState,
-    )
+    expect(
+      advanceRestoreFlow(
+        invalidConfirmState as unknown as Parameters<typeof advanceRestoreFlow>[0],
+        { type: 'confirm' },
+      ),
+    ).toEqual(invalidConfirmState)
   })
 
   it('keeps the done step unchanged for any later action', () => {

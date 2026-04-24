@@ -1,5 +1,5 @@
 import { CliError } from '../core/errors.js'
-import type { EnvMap } from '../core/schema.js'
+import { envMapSchema, type EnvMap } from '../core/schema.js'
 
 type SettingsEnvService = {
   read: () => Promise<EnvMap>
@@ -7,7 +7,12 @@ type SettingsEnvService = {
 }
 
 type PresetService = {
-  write: (name: string, env: EnvMap) => Promise<unknown>
+  write: (preset: {
+    name: string
+    createdAt: string
+    updatedAt: string
+    env: EnvMap
+  }) => Promise<unknown>
 }
 
 type HistoryService = {
@@ -56,23 +61,34 @@ export function createInitCommand({
       return
     }
 
-    const migratedEntries = Object.fromEntries(
-      result.selectedKeys
-        .filter((key) => key in currentEnv)
-        .map((key) => [key, currentEnv[key]]),
-    ) satisfies EnvMap
+    const migratedEntries = envMapSchema.parse(
+      Object.fromEntries(
+        result.selectedKeys
+          .filter((key) => key in currentEnv)
+          .map((key) => [key, currentEnv[key]]),
+      ),
+    )
 
-    const remainingEntries = Object.fromEntries(
-      Object.entries(currentEnv).filter(([key]) => !result.selectedKeys.includes(key)),
-    ) satisfies EnvMap
+    const remainingEntries = envMapSchema.parse(
+      Object.fromEntries(
+        Object.entries(currentEnv).filter(([key]) => !result.selectedKeys.includes(key)),
+      ),
+    )
 
     if (!result.presetName) {
       throw new CliError('A preset name is required')
     }
 
-    await presetService.write(result.presetName, migratedEntries)
+    const timestamp = new Date().toISOString()
+
+    await presetService.write({
+      name: result.presetName,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      env: migratedEntries,
+    })
     await historyService.write({
-      timestamp: new Date().toISOString(),
+      timestamp,
       action: 'init',
       movedKeys: result.selectedKeys,
       backup: migratedEntries,

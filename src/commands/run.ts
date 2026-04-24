@@ -11,7 +11,7 @@ function formatArgvToken(token: string): string {
 }
 
 type ConfigService = {
-  read: () => Promise<{ defaultPreset?: string }>
+  read: () => Promise<{ defaultPreset?: string | undefined }>
 }
 
 type PresetRecord = {
@@ -44,7 +44,7 @@ type EnvSources = (input: {
 type SpawnCommand = (
   command: string,
   args: string[],
-  env: NodeJS.ProcessEnv & EnvMap,
+  env: NodeJS.ProcessEnv,
 ) => Promise<void>
 
 export function createRunCommand({

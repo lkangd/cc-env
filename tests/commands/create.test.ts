@@ -56,8 +56,13 @@ describe('createPresetCreateCommand', () => {
       pairs: ['ANTHROPIC_BASE_URL=https://api.openai.com'],
     })
 
-    expect(presetService.write).toHaveBeenCalledWith('openai', {
-      ANTHROPIC_BASE_URL: 'https://api.openai.com',
+    expect(presetService.write).toHaveBeenCalledWith({
+      name: 'openai',
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+      env: {
+        ANTHROPIC_BASE_URL: 'https://api.openai.com',
+      },
     })
     expect(projectEnvService.write).not.toHaveBeenCalled()
     expect(renderFlow).not.toHaveBeenCalled()
@@ -164,7 +169,12 @@ describe('createPresetCreateCommand', () => {
       name: 'custom',
     })
 
-    expect(presetService.write).toHaveBeenCalledWith('custom', {})
+    expect(presetService.write).toHaveBeenCalledWith({
+      name: 'custom',
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+      env: {},
+    })
     expect(projectEnvService.write).not.toHaveBeenCalled()
   })
 
@@ -189,7 +199,12 @@ describe('createPresetCreateCommand', () => {
 
     await createPreset({})
 
-    expect(presetService.write).toHaveBeenCalledWith('openai', {})
+    expect(presetService.write).toHaveBeenCalledWith({
+      name: 'openai',
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+      env: {},
+    })
     expect(projectEnvService.write).not.toHaveBeenCalled()
   })
 

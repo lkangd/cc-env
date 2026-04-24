@@ -4,12 +4,17 @@ import { extname } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
 import { CliError } from '../../core/errors.js'
-import type { EnvMap } from '../../core/schema.js'
+import { envMapSchema, type EnvMap } from '../../core/schema.js'
 import { toProcessEnvMap } from '../../core/process-env.js'
 import type { PresetCreateAppResult } from '../../ink/preset-create-app.js'
 
 type PresetService = {
-  write: (name: string, env: EnvMap) => Promise<unknown>
+  write: (preset: {
+    name: string
+    createdAt: string
+    updatedAt: string
+    env: EnvMap
+  }) => Promise<unknown>
 }
 
 type ProjectEnvService = {
@@ -87,12 +92,12 @@ export function createPresetCreateCommand({
     pairs = [],
     project = false,
   }: CreatePresetOptions): Promise<void> {
-    const context: RenderFlowContext = {
-      name,
-      file,
+    const context = {
       pairs,
       project,
-    }
+      ...(name ? { name } : {}),
+      ...(file ? { file } : {}),
+    } satisfies RenderFlowContext
 
     if (!file && pairs.length === 0) {
       const result = await renderFlow(context)
@@ -104,13 +109,19 @@ export function createPresetCreateCommand({
       }
 
       if (result?.destination === 'preset') {
-        await presetService.write(name ?? 'openai', env)
+        const timestamp = new Date().toISOString()
+        await presetService.write({
+          name: name ?? 'openai',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          env,
+        })
       }
 
       return
     }
 
-    const env = file ? await readEnvFile(file) : parseInlinePairs(pairs)
+    const env = envMapSchema.parse(file ? await readEnvFile(file) : parseInlinePairs(pairs))
 
     if (project) {
       await projectEnvService.write(env)
@@ -121,6 +132,12 @@ export function createPresetCreateCommand({
       throw new CliError('Preset name is required', 2)
     }
 
-    await presetService.write(name, env)
+    const timestamp = new Date().toISOString()
+    await presetService.write({
+      name,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      env,
+    })
   }
 }

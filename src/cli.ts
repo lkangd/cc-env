@@ -1,5 +1,7 @@
 import React from 'react'
 import { render } from 'ink'
+import { join } from 'node:path'
+
 import { Command } from 'commander'
 
 const h = React.createElement
@@ -21,6 +23,8 @@ import {
 } from './flows/restore-flow.js'
 import { RestoreApp } from './ink/restore-app.js'
 import { toProcessEnvMap } from './core/process-env.js'
+import { CliError } from './core/errors.js'
+import { resolveGlobalRoot } from './core/paths.js'
 import { spawnCommand } from './core/spawn.js'
 import { createConfigService } from './services/config-service.js'
 import { createHistoryService } from './services/history-service.js'
@@ -33,12 +37,13 @@ const program = new Command()
 
 program.name('cc-env')
 
-const settingsPath = `${process.cwd()}/settings.json`
-const globalRoot = `${process.cwd()}/.cc-env-global`
+const cwd = process.cwd()
+const settingsPath = join(cwd, 'settings.json')
+const globalRoot = resolveGlobalRoot()
 
 const configService = createConfigService(globalRoot)
 const settingsEnvService = createSettingsEnvService({ settingsPath })
-const projectEnvService = createProjectEnvService({ cwd: process.cwd() })
+const projectEnvService = createProjectEnvService({ cwd })
 const runtimeEnvService = createRuntimeEnvService()
 const presetService = createPresetService(globalRoot)
 const historyService = createHistoryService(globalRoot)
@@ -49,39 +54,51 @@ function runRestoreFlow(context: {
 }) {
   const state = createRestoreFlowState(context.records)
   const firstRecord = context.records[0]
-  const selectedRecordState = firstRecord
-    ? advanceRestoreFlow(state, {
-        type: 'select-record',
-        timestamp: firstRecord.timestamp,
-      })
-    : state
-  const targetState = firstRecord
-    ? advanceRestoreFlow(selectedRecordState, {
-        type: 'select-target',
-        targetType: firstRecord.targetType,
-        targetName: firstRecord.targetName,
-      })
-    : selectedRecordState
 
-  render(h(RestoreApp, { state: context.yes ? targetState : state }))
-
-  if (!context.yes || !firstRecord || targetState.step !== 'confirm') {
+  if (!context.yes || !firstRecord) {
+    render(h(RestoreApp, { state }))
     return undefined
   }
 
-  const doneState = advanceRestoreFlow(targetState, { type: 'confirm' })
+  const selectedRecordState = advanceRestoreFlow(state, {
+    type: 'select-record',
+    timestamp: firstRecord.timestamp,
+  })
+  const confirmState = advanceRestoreFlow(selectedRecordState, {
+    type: 'select-target',
+    targetType: firstRecord.targetType,
+    ...(firstRecord.targetType === 'preset' ? { targetName: firstRecord.targetName } : {}),
+  })
 
-  if (doneState.step !== 'done') {
+  render(h(RestoreApp, { state: confirmState }))
+
+  if (confirmState.step !== 'confirm') {
     return undefined
   }
 
-  return {
-    confirmed: true,
-    timestamp: doneState.selectedTimestamp,
-    targetType: doneState.targetType,
-    targetName: doneState.targetName,
+  const doneState = advanceRestoreFlow(confirmState, { type: 'confirm' })
+
+  if (doneState.step === 'done' && doneState.targetType === 'preset') {
+    return {
+      confirmed: true,
+      timestamp: doneState.selectedTimestamp,
+      targetType: doneState.targetType,
+      targetName: doneState.targetName,
+    }
   }
+
+  if (doneState.step === 'done') {
+    return {
+      confirmed: true,
+      timestamp: doneState.selectedTimestamp,
+      targetType: doneState.targetType,
+    }
+  }
+
+  return undefined
 }
+
+program.exitOverride()
 
 program.command('run [command] [args...]')
   .option('-p, --preset <name>')
@@ -194,4 +211,22 @@ program.command('debug').action(
   }),
 )
 
-program.parse(process.argv)
+program.parseAsync(process.argv).catch((error: unknown) => {
+  if (error instanceof CliError) {
+    process.stderr.write(`${error.message}\n`)
+    process.exitCode = error.exitCode
+    return
+  }
+
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: string }).code === 'commander.helpDisplayed'
+  ) {
+    process.exitCode = 0
+    return
+  }
+
+  throw error
+})

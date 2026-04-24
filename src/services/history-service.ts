@@ -5,13 +5,9 @@ import { atomicWriteFile, ensureParentDir } from '../core/fs.js'
 import { withFileLock } from '../core/lock.js'
 import { resolveHistoryPath } from '../core/paths.js'
 import { historySchema } from '../core/schema.js'
+import type { RestoreRecord } from '../flows/restore-flow.js'
 
-type HistoryEntry = {
-  action: 'init' | 'restore'
-  targetType: 'settings' | 'preset'
-  targetName: string
-  timestamp: string
-}
+type HistoryEntry = RestoreRecord
 
 export function createHistoryService(globalRoot: string) {
   return {
@@ -24,6 +20,7 @@ export function createHistoryService(globalRoot: string) {
         ...parsed,
         targetName: record.targetName,
         timestamp: record.timestamp,
+        backup: record.backup,
       }
       const filePath = resolveHistoryPath(globalRoot, stored.timestamp)
       await ensureParentDir(filePath)
@@ -58,6 +55,7 @@ export function createHistoryService(globalRoot: string) {
           }),
           targetName: record.targetName,
           timestamp: record.timestamp,
+          backup: record.backup,
         }))
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
