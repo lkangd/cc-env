@@ -5,9 +5,10 @@ import {
   advancePresetCreateFlow,
   createPresetCreateFlowState,
   type PresetCreateDestination,
+  type PresetCreateFlowResult,
 } from '../flows/preset-create-flow.js'
 
-type PresetCreateAppResult = {
+export type PresetCreateAppResult = PresetCreateFlowResult & {
   destination: PresetCreateDestination
 }
 
@@ -62,10 +63,15 @@ export function PresetCreateApp({
     }
 
     if (state.step === 'confirm' && key.return && state.destination) {
-      const destination = state.destination
       const doneState = advancePresetCreateFlow(state, { type: 'confirm' })
       setState(doneState)
-      void Promise.resolve(onSubmit({ destination })).finally(() => {
+      void Promise.resolve(
+        onSubmit({
+          destination: state.destination,
+          selectedSources: state.selectedSources,
+          selectedKeys: state.selectedKeys,
+        }),
+      ).finally(() => {
         exit()
       })
     }

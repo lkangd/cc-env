@@ -10,6 +10,11 @@ export type PresetCreateFlowState = {
   destination?: PresetCreateDestination
 }
 
+export type PresetCreateFlowResult = Pick<
+  PresetCreateFlowState,
+  'selectedSources' | 'selectedKeys' | 'destination'
+>
+
 export type PresetCreateFlowAction =
   | {
       type: 'select-source'
@@ -39,16 +44,20 @@ export function advancePresetCreateFlow(
   state: PresetCreateFlowState,
   action: PresetCreateFlowAction,
 ): PresetCreateFlowState {
-  if (action.type === 'select-source') {
+  if (state.step === 'source' && action.type === 'select-source') {
+    if (state.selectedSources[0] === action.source) {
+      return state
+    }
+
     return {
       step: 'keys',
-      selectedSources: [...state.selectedSources, action.source],
+      selectedSources: [action.source],
       selectedKeys: state.selectedKeys,
       destination: state.destination,
     }
   }
 
-  if (action.type === 'select-keys') {
+  if (state.step === 'keys' && action.type === 'select-keys') {
     return {
       step: 'destination',
       selectedSources: state.selectedSources,
@@ -57,7 +66,7 @@ export function advancePresetCreateFlow(
     }
   }
 
-  if (action.type === 'select-destination') {
+  if (state.step === 'destination' && action.type === 'select-destination') {
     return {
       step: 'confirm',
       selectedSources: state.selectedSources,
@@ -66,10 +75,14 @@ export function advancePresetCreateFlow(
     }
   }
 
-  return {
-    step: 'done',
-    selectedSources: state.selectedSources,
-    selectedKeys: state.selectedKeys,
-    destination: state.destination,
+  if (state.step === 'confirm' && action.type === 'confirm') {
+    return {
+      step: 'done',
+      selectedSources: state.selectedSources,
+      selectedKeys: state.selectedKeys,
+      destination: state.destination,
+    }
   }
+
+  return state
 }

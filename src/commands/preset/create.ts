@@ -6,6 +6,7 @@ import { parse as parseYaml } from 'yaml'
 import { CliError } from '../../core/errors.js'
 import type { EnvMap } from '../../core/schema.js'
 import { toProcessEnvMap } from '../../core/process-env.js'
+import type { PresetCreateAppResult } from '../../ink/preset-create-app.js'
 
 type PresetService = {
   write: (name: string, env: EnvMap) => Promise<unknown>
@@ -25,14 +26,10 @@ type CreatePresetOptions = {
 type RenderFlowContext = Required<Pick<CreatePresetOptions, 'pairs' | 'project'>>
   & Pick<CreatePresetOptions, 'name' | 'file'>
 
-type InteractivePresetCreateResult = {
-  destination: 'project' | 'preset'
-}
-
 type CreatePresetCreateCommandOptions = {
   presetService: PresetService
   projectEnvService: ProjectEnvService
-  renderFlow: (context: RenderFlowContext) => Promise<InteractivePresetCreateResult | void> | InteractivePresetCreateResult | void
+  renderFlow: (context: RenderFlowContext) => Promise<PresetCreateAppResult | void> | PresetCreateAppResult | void
 }
 
 export function parseInlinePairs(pairs: string[]): EnvMap {
