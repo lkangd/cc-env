@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { atomicWriteFile } from '../../src/core/fs.js'
 import { withFileLock } from '../../src/core/lock.js'
 import { CliError } from '../../src/core/errors.js'
+import type { HistoryRecord } from '../../src/core/schema.js'
 import { createConfigService } from '../../src/services/config-service.js'
 import { createHistoryService } from '../../src/services/history-service.js'
 import { createPresetService } from '../../src/services/preset-service.js'
@@ -141,9 +142,9 @@ describe('history service', () => {
     const globalRoot = await createTempRoot()
     const service = createHistoryService(globalRoot)
 
-    const record = {
-      action: 'init' as const,
-      targetType: 'preset' as const,
+    const record: HistoryRecord = {
+      action: 'init',
+      targetType: 'preset',
       targetName: 'openai',
       timestamp: '2026-04-24T12:34:56.000Z',
       movedKeys: ['OPENAI_API_KEY'],
@@ -152,7 +153,7 @@ describe('history service', () => {
       },
     }
 
-    await expect(service.write(record as Parameters<typeof service.write>[0])).resolves.toEqual(record)
+    await expect(service.write(record)).resolves.toEqual(record)
     await expect(service.list()).resolves.toEqual([record])
   })
 })

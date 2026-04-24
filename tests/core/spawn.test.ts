@@ -29,4 +29,18 @@ describe('spawnCommand', () => {
       new CliError('Command terminated by signal SIGTERM'),
     )
   })
+
+  it('rejects with a human-readable CliError when the process closes without an exit code or signal', async () => {
+    const child = new EventEmitter()
+    spawnMock.mockReturnValue(child)
+
+    const { spawnCommand } = await import('../../src/core/spawn.js')
+    const promise = spawnCommand('node', ['script.js'], process.env)
+
+    child.emit('close', null, null)
+
+    await expect(promise).rejects.toEqual(
+      new CliError('Command terminated without an exit code'),
+    )
+  })
 })

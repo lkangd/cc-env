@@ -5,14 +5,16 @@ import { atomicWriteFile, ensureParentDir } from '../core/fs.js'
 import { withFileLock } from '../core/lock.js'
 import { resolveHistoryPath } from '../core/paths.js'
 import { historySchema } from '../core/schema.js'
-import type { RestoreRecord } from '../flows/restore-flow.js'
+import type { HistoryRecord } from '../core/schema.js'
 
-type HistoryEntry = RestoreRecord
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error
+}
 
 export function createHistoryService(globalRoot: string) {
   return {
-    async write(record: HistoryEntry): Promise<HistoryEntry> {
-      const stored = historySchema.parse(record) as HistoryEntry
+    async write(record: HistoryRecord): Promise<HistoryRecord> {
+      const stored = historySchema.parse(record)
       const filePath = resolveHistoryPath(globalRoot, stored.timestamp)
       await ensureParentDir(filePath)
 
@@ -22,7 +24,7 @@ export function createHistoryService(globalRoot: string) {
       })
     },
 
-    async list(): Promise<HistoryEntry[]> {
+    async list(): Promise<HistoryRecord[]> {
       const dirPath = dirname(resolveHistoryPath(globalRoot, 'placeholder'))
 
       try {
@@ -32,16 +34,14 @@ export function createHistoryService(globalRoot: string) {
           .map((entry) => entry.name)
           .sort()
 
-        const records = await Promise.all(
+        return Promise.all(
           fileNames.map(async (fileName) => {
             const content = await readFile(join(dirPath, fileName), 'utf8')
-            return JSON.parse(content) as HistoryEntry
+            return historySchema.parse(JSON.parse(content))
           }),
         )
-
-        return records.map((record) => historySchema.parse(record) as HistoryEntry)
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        if (isErrnoException(error) && error.code === 'ENOENT') {
           return []
         }
 
