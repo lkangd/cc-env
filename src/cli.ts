@@ -82,7 +82,11 @@ presetCommand.command('create [pairs...]')
       presetService,
       projectEnvService,
       renderFlow: async (context) => {
-        let result: { destination: 'project' | 'preset' } | undefined
+        let result: React.ComponentProps<typeof PresetCreateApp>['onSubmit'] extends (
+          result: infer TResult,
+        ) => unknown
+          ? TResult | undefined
+          : undefined
         const app = render(
           h(PresetCreateApp, {
             onSubmit: (value) => {

@@ -62,6 +62,20 @@ async function readEnvFile(filePath: string): Promise<EnvMap> {
   }
 }
 
+function buildPlaceholderEnv(selectedKeys: string[]): EnvMap {
+  return toProcessEnvMap(
+    Object.fromEntries(
+      selectedKeys.flatMap((key) => {
+        if (key === 'ANTHROPIC_BASE_URL') {
+          return [[key, 'https://api.openai.com']]
+        }
+
+        return []
+      }),
+    ),
+  )
+}
+
 export function createPresetCreateCommand({
   presetService,
   projectEnvService,
@@ -82,9 +96,7 @@ export function createPresetCreateCommand({
 
     if (!file && pairs.length === 0) {
       const result = await renderFlow(context)
-      const env = {
-        ANTHROPIC_BASE_URL: 'https://api.openai.com',
-      } satisfies EnvMap
+      const env = buildPlaceholderEnv(result?.selectedKeys ?? [])
 
       if (result?.destination === 'project') {
         await projectEnvService.write(env)

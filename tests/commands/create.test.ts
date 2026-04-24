@@ -141,7 +141,7 @@ describe('createPresetCreateCommand', () => {
     expect(projectEnvService.write).not.toHaveBeenCalled()
   })
 
-  it('accepts richer interactive flow data while preserving placeholder preset writes', async () => {
+  it('uses selectedKeys from interactive preset results to build placeholder preset env', async () => {
     const presetService = {
       write: vi.fn().mockResolvedValue(undefined),
     }
@@ -150,6 +150,31 @@ describe('createPresetCreateCommand', () => {
     }
     const renderFlow = vi.fn().mockResolvedValue({
       destination: 'preset',
+      selectedSources: ['process'],
+      selectedKeys: ['UNRELATED_KEY'],
+    })
+
+    const createPreset = createPresetCreateCommand({
+      presetService,
+      projectEnvService,
+      renderFlow,
+    })
+
+    await createPreset({})
+
+    expect(presetService.write).toHaveBeenCalledWith('openai', {})
+    expect(projectEnvService.write).not.toHaveBeenCalled()
+  })
+
+  it('preserves placeholder project writes when interactive flow selects ANTHROPIC_BASE_URL', async () => {
+    const presetService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const projectEnvService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const renderFlow = vi.fn().mockResolvedValue({
+      destination: 'project',
       selectedSources: ['process'],
       selectedKeys: ['ANTHROPIC_BASE_URL'],
     })
@@ -162,9 +187,9 @@ describe('createPresetCreateCommand', () => {
 
     await createPreset({})
 
-    expect(presetService.write).toHaveBeenCalledWith('openai', {
+    expect(projectEnvService.write).toHaveBeenCalledWith({
       ANTHROPIC_BASE_URL: 'https://api.openai.com',
     })
-    expect(projectEnvService.write).not.toHaveBeenCalled()
+    expect(presetService.write).not.toHaveBeenCalled()
   })
 })
