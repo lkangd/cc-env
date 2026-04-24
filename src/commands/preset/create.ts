@@ -15,17 +15,20 @@ type ProjectEnvService = {
   write: (env: EnvMap) => Promise<unknown>
 }
 
-type CreatePresetCreateCommandOptions = {
-  presetService: PresetService
-  projectEnvService: ProjectEnvService
-  renderFlow: () => Promise<unknown> | unknown
-}
-
 type CreatePresetOptions = {
   name?: string
   file?: string
   pairs?: string[]
   project?: boolean
+}
+
+type RenderFlowContext = Required<Pick<CreatePresetOptions, 'pairs' | 'project'>>
+  & Pick<CreatePresetOptions, 'name' | 'file'>
+
+type CreatePresetCreateCommandOptions = {
+  presetService: PresetService
+  projectEnvService: ProjectEnvService
+  renderFlow: (context: RenderFlowContext) => Promise<unknown> | unknown
 }
 
 export function parseInlinePairs(pairs: string[]): EnvMap {
@@ -45,13 +48,17 @@ export function parseInlinePairs(pairs: string[]): EnvMap {
 }
 
 async function readEnvFile(filePath: string): Promise<EnvMap> {
-  const content = await readFile(filePath, 'utf8')
-  const extension = extname(filePath).toLowerCase()
-  const parsed = extension === '.yaml' || extension === '.yml'
-    ? parseYaml(content)
-    : JSON.parse(content)
+  try {
+    const content = await readFile(filePath, 'utf8')
+    const extension = extname(filePath).toLowerCase()
+    const parsed = extension === '.yaml' || extension === '.yml'
+      ? parseYaml(content)
+      : JSON.parse(content)
 
-  return toProcessEnvMap((parsed ?? {}) as Record<string, unknown>)
+    return toProcessEnvMap((parsed ?? {}) as Record<string, unknown>)
+  } catch {
+    throw new CliError(`Failed to read env file: ${filePath}`, 2)
+  }
 }
 
 export function createPresetCreateCommand({
@@ -65,8 +72,15 @@ export function createPresetCreateCommand({
     pairs = [],
     project = false,
   }: CreatePresetOptions): Promise<void> {
+    const context: RenderFlowContext = {
+      name,
+      file,
+      pairs,
+      project,
+    }
+
     if (!file && pairs.length === 0) {
-      await renderFlow()
+      await renderFlow(context)
       return
     }
 
