@@ -25,17 +25,27 @@ export function PresetCreateApp({
       return
     }
 
-    if (state.step === 'source' && (input === 'o' || key.return)) {
+    if (state.step === 'source' && (input === 'p' || key.return)) {
       setState((current) =>
         advancePresetCreateFlow(current, {
           type: 'select-source',
-          source: 'openai',
+          source: 'process',
         }),
       )
       return
     }
 
-    if (state.step === 'keys') {
+    if (state.step === 'keys' && key.return) {
+      setState((current) =>
+        advancePresetCreateFlow(current, {
+          type: 'select-keys',
+          keys: ['ANTHROPIC_BASE_URL'],
+        }),
+      )
+      return
+    }
+
+    if (state.step === 'destination') {
       const destination = input === 'p' ? 'project' : input === 's' || key.return ? 'preset' : undefined
 
       if (!destination) {
@@ -52,7 +62,10 @@ export function PresetCreateApp({
     }
 
     if (state.step === 'confirm' && key.return && state.destination) {
-      void Promise.resolve(onSubmit({ destination: state.destination })).finally(() => {
+      const destination = state.destination
+      const doneState = advancePresetCreateFlow(state, { type: 'confirm' })
+      setState(doneState)
+      void Promise.resolve(onSubmit({ destination })).finally(() => {
         exit()
       })
     }
@@ -62,13 +75,19 @@ export function PresetCreateApp({
     <Box flexDirection="column">
       <Text>Preset create</Text>
       {state.step === 'source' ? (
-        <Text>Select source: press o for openai</Text>
+        <Text>Select source: press p for process</Text>
       ) : null}
       {state.step === 'keys' ? (
+        <Text>Select keys: press enter to keep ANTHROPIC_BASE_URL</Text>
+      ) : null}
+      {state.step === 'destination' ? (
         <Text>Select destination: press p for project or s for preset</Text>
       ) : null}
       {state.step === 'confirm' ? (
         <Text>Press enter to confirm {state.destination}</Text>
+      ) : null}
+      {state.step === 'done' ? (
+        <Text>Done</Text>
       ) : null}
     </Box>
   )

@@ -10,38 +10,95 @@ describe('preset create flow', () => {
     expect(createPresetCreateFlowState()).toEqual({
       step: 'source',
       selectedSources: [],
+      selectedKeys: [],
     })
   })
 
-  it('selecting source moves to keys and records selectedSources', () => {
+  it('moves from source to keys and records selectedSources', () => {
     const state = createPresetCreateFlowState()
 
     expect(
       advancePresetCreateFlow(state, {
         type: 'select-source',
-        source: 'openai',
+        source: 'process',
       }),
     ).toEqual({
       step: 'keys',
-      selectedSources: ['openai'],
+      selectedSources: ['process'],
+      selectedKeys: [],
     })
   })
 
-  it('selecting destination records destination and moves to confirm', () => {
+  it('moves from keys to destination and records selectedKeys', () => {
     const sourceState = advancePresetCreateFlow(createPresetCreateFlowState(), {
       type: 'select-source',
-      source: 'openai',
+      source: 'process',
     })
 
     expect(
       advancePresetCreateFlow(sourceState, {
+        type: 'select-keys',
+        keys: ['ANTHROPIC_BASE_URL'],
+      }),
+    ).toEqual({
+      step: 'destination',
+      selectedSources: ['process'],
+      selectedKeys: ['ANTHROPIC_BASE_URL'],
+    })
+  })
+
+  it('moves from destination to confirm and records destination', () => {
+    const keysState = advancePresetCreateFlow(
+      advancePresetCreateFlow(createPresetCreateFlowState(), {
+        type: 'select-source',
+        source: 'process',
+      }),
+      {
+        type: 'select-keys',
+        keys: ['ANTHROPIC_BASE_URL'],
+      },
+    )
+
+    expect(
+      advancePresetCreateFlow(keysState, {
         type: 'select-destination',
         destination: 'project',
       }),
     ).toEqual({
       step: 'confirm',
-      selectedSources: ['openai'],
+      selectedSources: ['process'],
+      selectedKeys: ['ANTHROPIC_BASE_URL'],
       destination: 'project',
+    })
+  })
+
+  it('moves from confirm to done on confirm', () => {
+    const confirmState = advancePresetCreateFlow(
+      advancePresetCreateFlow(
+        advancePresetCreateFlow(createPresetCreateFlowState(), {
+          type: 'select-source',
+          source: 'process',
+        }),
+        {
+          type: 'select-keys',
+          keys: ['ANTHROPIC_BASE_URL'],
+        },
+      ),
+      {
+        type: 'select-destination',
+        destination: 'preset',
+      },
+    )
+
+    expect(
+      advancePresetCreateFlow(confirmState, {
+        type: 'confirm',
+      }),
+    ).toEqual({
+      step: 'done',
+      selectedSources: ['process'],
+      selectedKeys: ['ANTHROPIC_BASE_URL'],
+      destination: 'preset',
     })
   })
 })
