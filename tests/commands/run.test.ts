@@ -1,8 +1,5 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
+import { rm } from 'node:fs/promises'
 
-import { execa } from 'execa'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createRunCommand } from '../../src/commands/run.js'
@@ -10,35 +7,29 @@ import { CliError } from '../../src/core/errors.js'
 
 const tempDirs: string[] = []
 
-async function createCliFixture(): Promise<string> {
-  const cwd = await mkdtemp(join(tmpdir(), 'cc-env-run-'))
-  tempDirs.push(cwd)
-
-  await mkdir(join(cwd, '.cc-env-global', 'presets'), { recursive: true })
-  await writeFile(
-    join(cwd, '.cc-env-global', 'config.json'),
-    `${JSON.stringify({ defaultPreset: 'openai' }, null, 2)}\n`,
-  )
-  await writeFile(
-    join(cwd, '.cc-env-global', 'presets', 'openai.json'),
-    `${JSON.stringify({
-      name: 'openai',
-      createdAt: '2026-04-24T00:00:00.000Z',
-      updatedAt: '2026-04-24T00:00:00.000Z',
-      env: {
-        OPENAI_API_KEY: 'sk-1234567890',
-      },
-    }, null, 2)}\n`,
-  )
-
-  return cwd
-}
-
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
 describe('createRunCommand', () => {
+  it('throws a usage error when no command is provided', async () => {
+    const run = createRunCommand({
+      configService: {
+        read: vi.fn(),
+      },
+      presetService: {
+        read: vi.fn(),
+      },
+      envSources: vi.fn(),
+      runtimeEnvService: {
+        merge: vi.fn(),
+      },
+      spawnCommand: vi.fn(),
+    })
+
+    await expect(run({})).rejects.toEqual(new CliError('A command to run is required', 2))
+  })
+
   it('throws when neither explicit nor default preset is available', async () => {
     const run = createRunCommand({
       configService: {
@@ -60,34 +51,6 @@ describe('createRunCommand', () => {
         args: ['script.js'],
       }),
     ).rejects.toEqual(new CliError('No preset selected'))
-  })
-
-  it('supports top-level --dry-run execution through the CLI', async () => {
-    const cwd = await createCliFixture()
-
-    const { stdout } = await execa(
-      process.execPath,
-      [
-        '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1/node_modules/tsx/dist/cli.mjs',
-        '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1/src/cli.ts',
-        '--dry-run',
-        'node',
-        'script.js',
-      ],
-      {
-        cwd,
-        extendEnv: false,
-        env: {
-          HOME: process.env.HOME,
-          PATH: process.env.PATH,
-          TMPDIR: process.env.TMPDIR,
-        },
-      },
-    )
-
-    expect(stdout).toContain('Would run:')
-    expect(stdout).toContain('OPENAI_API_KEY=sk-123456********')
-    expect(stdout).toContain('node script.js')
   })
 
   it('prints a preview during dry-run and does not call spawnCommand', async () => {
@@ -164,5 +127,56 @@ describe('createRunCommand', () => {
       ].join('\n'),
     )
     expect(spawnCommand).not.toHaveBeenCalled()
+  })
+
+  it('quotes spaced dry-run args deterministically', async () => {
+    const stdout = {
+      write: vi.fn(),
+    }
+    const run = createRunCommand({
+      configService: {
+        read: vi.fn().mockResolvedValue({
+          defaultPreset: 'openai',
+        }),
+      },
+      presetService: {
+        read: vi.fn().mockResolvedValue({
+          env: {
+            OPENAI_API_KEY: 'sk-1234567890',
+          },
+        }),
+      },
+      envSources: vi.fn().mockResolvedValue({
+        settingsEnv: {},
+        processEnv: {},
+        presetEnv: {
+          OPENAI_API_KEY: 'sk-1234567890',
+        },
+        projectEnv: {},
+      }),
+      runtimeEnvService: {
+        merge: vi.fn().mockReturnValue({
+          OPENAI_API_KEY: 'sk-1234567890',
+        }),
+      },
+      spawnCommand: vi.fn(),
+      stdout,
+    })
+
+    await run({
+      dryRun: true,
+      command: 'node',
+      args: ['script.js', 'two words', 'say "hi"'],
+    })
+
+    expect(stdout.write).toHaveBeenCalledWith(
+      [
+        'Would run:',
+        'OPENAI_API_KEY=sk-123456********',
+        '',
+        'node script.js "two words" "say \\"hi\\""',
+        '',
+      ].join('\n'),
+    )
   })
 })

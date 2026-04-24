@@ -2,6 +2,14 @@ import { CliError } from '../core/errors.js'
 import { formatEnvBlock } from '../core/format.js'
 import type { EnvMap } from '../core/schema.js'
 
+function formatArgvToken(token: string): string {
+  if (/^[A-Za-z0-9_./:-]+$/.test(token)) {
+    return token
+  }
+
+  return JSON.stringify(token)
+}
+
 type ConfigService = {
   read: () => Promise<{ defaultPreset?: string }>
 }
@@ -62,9 +70,13 @@ export function createRunCommand({
   }: {
     preset?: string
     dryRun?: boolean
-    command: string
+    command?: string
     args?: string[]
   }): Promise<void> {
+    if (!command) {
+      throw new CliError('A command to run is required', 2)
+    }
+
     const config = await configService.read()
     const effectivePreset = preset ?? config.defaultPreset
 
@@ -82,7 +94,8 @@ export function createRunCommand({
 
     if (dryRun) {
       const envBlock = formatEnvBlock(mergedEnv)
-      stdout.write(`Would run:\n${envBlock}\n\n${[command, ...args].join(' ')}\n`)
+      const preview = [command, ...args].map(formatArgvToken).join(' ')
+      stdout.write(`Would run:\n${envBlock}\n\n${preview}\n`)
       return
     }
 
