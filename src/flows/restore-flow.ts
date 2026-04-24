@@ -47,6 +47,14 @@ export function advanceRestoreFlow(
         return state
       }
 
+      const selectedRecord = state.records.find(
+        (record) => record.timestamp === action.timestamp,
+      )
+
+      if (!selectedRecord) {
+        return state
+      }
+
       return {
         ...state,
         step: 'target',

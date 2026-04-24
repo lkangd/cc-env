@@ -39,6 +39,20 @@ const runtimeEnvService = createRuntimeEnvService()
 const presetService = createPresetService(globalRoot)
 const historyService = createHistoryService(globalRoot)
 
+function createMinimalRestoreResult(context: {
+  records: Awaited<ReturnType<typeof historyService.list>>
+  yes: boolean
+}) {
+  const firstRecord = context.records[0]
+
+  return {
+    confirmed: context.yes && Boolean(firstRecord),
+    timestamp: firstRecord?.timestamp,
+    targetType: firstRecord?.targetType ?? 'settings',
+    targetName: firstRecord?.targetName,
+  }
+}
+
 program.command('run [command] [args...]')
   .option('-p, --preset <name>')
   .option('--dry-run')
@@ -91,13 +105,7 @@ program.command('restore')
       presetService,
       renderFlow: async (context) => {
         render(h(RestoreApp))
-        const firstRecord = context.records[0]
-        return {
-          confirmed: context.yes && Boolean(firstRecord),
-          timestamp: firstRecord?.timestamp,
-          targetType: firstRecord?.targetType ?? 'settings',
-          targetName: firstRecord?.targetName,
-        }
+        return createMinimalRestoreResult(context)
       },
     })({
       yes: options.yes,
