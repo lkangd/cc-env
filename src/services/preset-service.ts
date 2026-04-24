@@ -1,7 +1,8 @@
-import { readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { readdir, readFile, rm } from 'node:fs/promises'
+import { dirname } from 'node:path'
 
 import { CliError } from '../core/errors.js'
-import { ensureParentDir } from '../core/fs.js'
+import { atomicWriteFile } from '../core/fs.js'
 import { withFileLock } from '../core/lock.js'
 import { resolvePresetPath } from '../core/paths.js'
 import { presetSchema, type Preset } from '../core/schema.js'
@@ -19,10 +20,9 @@ export function createPresetService(globalRoot: string) {
     async write(preset: Preset): Promise<StoredPreset> {
       const parsed = presetSchema.parse(preset)
       const filePath = getPath(parsed.name)
-      await ensureParentDir(filePath)
 
       return withFileLock(filePath, async () => {
-        await writeFile(filePath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8')
+        await atomicWriteFile(filePath, `${JSON.stringify(parsed, null, 2)}\n`)
         return { ...parsed, filePath }
       })
     },
@@ -44,7 +44,7 @@ export function createPresetService(globalRoot: string) {
     },
 
     async listNames(): Promise<string[]> {
-      const dirPath = getPath('placeholder').replace(/\/placeholder\.json$/, '')
+      const dirPath = dirname(getPath('placeholder'))
 
       try {
         const entries = await readdir(dirPath, { withFileTypes: true })
@@ -64,13 +64,15 @@ export function createPresetService(globalRoot: string) {
     async remove(name: string): Promise<void> {
       const filePath = getPath(name)
 
-      try {
-        await rm(filePath)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw error
+      await withFileLock(filePath, async () => {
+        try {
+          await rm(filePath)
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw error
+          }
         }
-      }
+      })
     },
   }
 }

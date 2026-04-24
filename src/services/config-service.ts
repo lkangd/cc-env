@@ -1,7 +1,7 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 
 import { configSchema, type Config } from '../core/schema.js'
-import { ensureParentDir } from '../core/fs.js'
+import { atomicWriteFile } from '../core/fs.js'
 import { withFileLock } from '../core/lock.js'
 import { resolveConfigPath } from '../core/paths.js'
 
@@ -24,10 +24,9 @@ export function createConfigService(globalRoot: string) {
 
     async write(config: Config): Promise<Config> {
       const parsed = configSchema.parse(config)
-      await ensureParentDir(filePath)
 
       return withFileLock(filePath, async () => {
-        await writeFile(filePath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8')
+        await atomicWriteFile(filePath, `${JSON.stringify(parsed, null, 2)}\n`)
         return parsed
       })
     },
