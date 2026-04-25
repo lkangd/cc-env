@@ -2,7 +2,12 @@ import { z } from 'zod'
 
 const envKeySchema = z.string().regex(/^[A-Z0-9_]+$/)
 
-export const envMapSchema = z.record(envKeySchema, z.string())
+export const envMapSchema = z.record(
+  envKeySchema,
+  z.unknown()
+    .refine((value) => value === null || typeof value !== 'object')
+    .transform((value) => String(value)),
+)
 
 export const presetSchema = z.object({
   name: z.string(),

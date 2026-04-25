@@ -71,7 +71,7 @@ describe('project env service', () => {
 })
 
 describe('runtime env service', () => {
-  it('merges env in settings < process < preset < project order', () => {
+  it('merges env in process < settings < project < preset order', () => {
     const service = createRuntimeEnvService()
 
     expect(
@@ -94,7 +94,7 @@ describe('runtime env service', () => {
         },
       }),
     ).toEqual({
-      SHARED: 'project',
+      SHARED: 'preset',
       SETTINGS_ONLY: 'settings-only',
       PROCESS_ONLY: 'process-only',
       PRESET_ONLY: 'preset-only',

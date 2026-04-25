@@ -22,6 +22,20 @@ describe('envMapSchema', () => {
     expect(() => envMapSchema.parse({ NESTED: { NOPE: 'x' } })).toThrow()
   })
 
+  it('accepts non-object values by stringifying them', () => {
+    const result = envMapSchema.parse({
+      PORT: 3000,
+      ENABLED: true,
+      EMPTY: null,
+    })
+
+    expect(result).toEqual({
+      PORT: '3000',
+      ENABLED: 'true',
+      EMPTY: 'null',
+    })
+  })
+
   it('rejects lowercase keys', () => {
     expect(() => envMapSchema.parse({ api_url: 'https://example.com' })).toThrow()
   })

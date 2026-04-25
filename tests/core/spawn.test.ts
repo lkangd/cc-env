@@ -39,8 +39,9 @@ describe('spawnCommand', () => {
 
     child.emit('close', null, null)
 
-    await expect(promise).rejects.toEqual(
-      new CliError('Command terminated without an exit code'),
-    )
+    await expect(promise).rejects.toMatchObject({
+      message: 'Command terminated without an exit code',
+      exitCode: 1,
+    })
   })
 })

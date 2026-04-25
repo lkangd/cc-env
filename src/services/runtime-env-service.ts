@@ -14,10 +14,10 @@ export function createRuntimeEnvService() {
       projectEnv: EnvMap
     }): EnvMap {
       return envMapSchema.parse({
-        ...settingsEnv,
         ...processEnv,
-        ...presetEnv,
+        ...settingsEnv,
         ...projectEnv,
+        ...presetEnv,
       })
     },
   }

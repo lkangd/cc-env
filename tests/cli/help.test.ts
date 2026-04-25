@@ -1,9 +1,14 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { execa } from 'execa'
 import { afterEach, describe, expect, it } from 'vitest'
+
+const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
+const tsxLoader = join(repoRoot, 'node_modules/tsx/dist/loader.mjs')
+const cliEntry = join(repoRoot, 'src/cli.ts')
 
 const tempRoots: string[] = []
 
@@ -58,8 +63,8 @@ afterEach(async () => {
 
 describe('cc-env CLI help', () => {
   it('shows the top-level commands in --help output', async () => {
-    const { stdout } = await execa('npx', ['tsx', 'src/cli.ts', '--help'], {
-      cwd: '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1',
+    const { stdout } = await execa('node', ['--import', tsxLoader, cliEntry, '--help'], {
+      cwd: repoRoot,
     })
 
     expect(stdout).toContain('run')
@@ -70,8 +75,8 @@ describe('cc-env CLI help', () => {
   })
 
   it('shows the preset subcommands in help output', async () => {
-    const { stdout } = await execa('npx', ['tsx', 'src/cli.ts', 'preset', '--help'], {
-      cwd: '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1',
+    const { stdout } = await execa('node', ['--import', tsxLoader, cliEntry, 'preset', '--help'], {
+      cwd: repoRoot,
     })
 
     expect(stdout).toContain('list')
@@ -84,15 +89,7 @@ describe('cc-env CLI help', () => {
     const { homeDir, projectDir } = await createCliFixture()
     const { stdout } = await execa(
       'node',
-      [
-        '--import',
-        '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1/node_modules/tsx/dist/loader.mjs',
-        '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1/src/cli.ts',
-        'run',
-        '--dry-run',
-        'node',
-        'script.js',
-      ],
+      ['--import', tsxLoader, cliEntry, 'run', '--dry-run', 'node', 'script.js'],
       {
         cwd: projectDir,
         env: {
@@ -110,14 +107,9 @@ describe('cc-env CLI help', () => {
   it('prints CliError messages without stack traces at the top level', async () => {
     const result = await execa(
       'node',
-      [
-        '--import',
-        '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1/node_modules/tsx/dist/loader.mjs',
-        '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1/src/cli.ts',
-        'run',
-      ],
+      ['--import', tsxLoader, cliEntry, 'run'],
       {
-        cwd: '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1',
+        cwd: repoRoot,
         reject: false,
       },
     )
