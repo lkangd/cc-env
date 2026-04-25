@@ -1,8 +1,21 @@
 import { CliError } from '../core/errors.js'
 import type { EnvMap, HistoryRecord, Preset } from '../core/schema.js'
+import type { ShellWriteRecord } from '../services/shell-env-service.js'
 
 type HistoryService = {
   list: () => Promise<HistoryRecord[]>
+}
+
+type ClaudeSettingsEnvService = {
+  read: () => Promise<{
+    settings: { env: EnvMap }
+    settingsLocal: { env: EnvMap }
+  }>
+  write: (input: { settingsEnv: EnvMap; settingsLocalEnv: EnvMap }) => Promise<void>
+}
+
+type ShellEnvService = {
+  removeKeys: (shellWrites: ShellWriteRecord[], keys: string[]) => Promise<void>
 }
 
 type SettingsEnvService = {
@@ -24,11 +37,15 @@ type RestoreFlowResult = {
 
 export function createRestoreCommand({
   historyService,
+  claudeSettingsEnvService,
+  shellEnvService,
   settingsEnvService,
   presetService,
   renderFlow,
 }: {
   historyService: HistoryService
+  claudeSettingsEnvService: ClaudeSettingsEnvService
+  shellEnvService: ShellEnvService
   settingsEnvService: SettingsEnvService
   presetService: PresetService
   renderFlow: (context: {
@@ -48,6 +65,22 @@ export function createRestoreCommand({
 
     if (!record) {
       throw new CliError('Restore record not found')
+    }
+
+    if (record.action === 'init') {
+      const current = await claudeSettingsEnvService.read()
+      await shellEnvService.removeKeys(record.shellWrites, record.migratedKeys)
+      await claudeSettingsEnvService.write({
+        settingsEnv: {
+          ...current.settings.env,
+          ...record.settingsBackup,
+        },
+        settingsLocalEnv: {
+          ...current.settingsLocal.env,
+          ...record.settingsLocalBackup,
+        },
+      })
+      return
     }
 
     if (result.targetType === 'settings') {

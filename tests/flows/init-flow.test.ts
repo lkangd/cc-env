@@ -6,26 +6,35 @@ import {
 } from '../../src/flows/init-flow.js'
 
 describe('init flow', () => {
-  it("starts on the keys step", () => {
-    expect(createInitFlowState(['OPENAI_API_KEY', 'BASE_URL'])).toEqual({
-      step: 'keys',
-      availableKeys: ['OPENAI_API_KEY', 'BASE_URL'],
-      selectedKeys: [],
-    })
-  })
+  it('preselects required keys and does not let them be toggled off', () => {
+    const state = createInitFlowState(
+      ['ANTHROPIC_AUTH_TOKEN', 'EXTRA_KEY'],
+      ['ANTHROPIC_AUTH_TOKEN'],
+    )
 
-  it('moves from keys to target when keys are selected', () => {
-    const state = createInitFlowState(['OPENAI_API_KEY', 'BASE_URL'])
+    expect(state).toEqual({
+      step: 'keys',
+      availableKeys: ['ANTHROPIC_AUTH_TOKEN', 'EXTRA_KEY'],
+      requiredKeys: ['ANTHROPIC_AUTH_TOKEN'],
+      selectedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+    })
 
     expect(
       advanceInitFlow(state, {
-        type: 'select-keys',
-        keys: ['OPENAI_API_KEY'],
-      }),
-    ).toEqual({
-      step: 'target',
-      availableKeys: ['OPENAI_API_KEY', 'BASE_URL'],
-      selectedKeys: ['OPENAI_API_KEY'],
+        type: 'toggle-key',
+        key: 'ANTHROPIC_AUTH_TOKEN',
+      }).selectedKeys,
+    ).toEqual(['ANTHROPIC_AUTH_TOKEN'])
+  })
+
+  it('moves directly from key selection to confirm', () => {
+    const state = createInitFlowState(['ANTHROPIC_AUTH_TOKEN'], ['ANTHROPIC_AUTH_TOKEN'])
+
+    expect(advanceInitFlow(state, { type: 'continue' })).toEqual({
+      step: 'confirm',
+      availableKeys: ['ANTHROPIC_AUTH_TOKEN'],
+      requiredKeys: ['ANTHROPIC_AUTH_TOKEN'],
+      selectedKeys: ['ANTHROPIC_AUTH_TOKEN'],
     })
   })
 })

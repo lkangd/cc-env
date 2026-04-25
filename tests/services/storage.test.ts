@@ -111,7 +111,7 @@ describe('preset service', () => {
 })
 
 describe('history service', () => {
-  it('writes records and lists them with targetName preserved', async () => {
+  it('writes restore records and lists them with targetName preserved', async () => {
     const globalRoot = await createTempRoot()
     const service = createHistoryService(globalRoot)
 
@@ -138,22 +138,39 @@ describe('history service', () => {
     ])
   })
 
-  it('validates, stores, and returns the full history shape used by restore logic', async () => {
+  it('persists expanded init history records', async () => {
     const globalRoot = await createTempRoot()
     const service = createHistoryService(globalRoot)
 
     const record: HistoryRecord = {
+      timestamp: '2026-04-24T10:00:00.000Z',
       action: 'init',
-      targetType: 'preset',
-      targetName: 'openai',
-      timestamp: '2026-04-24T12:34:56.000Z',
-      movedKeys: ['OPENAI_API_KEY'],
-      backup: {
-        OPENAI_API_KEY: 'sk-123',
+      migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+      settingsBackup: {},
+      settingsLocalBackup: {
+        ANTHROPIC_AUTH_TOKEN: 'local-token',
       },
+      shellWrites: [
+        {
+          shell: 'fish',
+          filePath: '/Users/test/.config/fish/config.fish',
+          env: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
+          },
+        },
+      ],
     }
 
     await expect(service.write(record)).resolves.toEqual(record)
-    await expect(service.list()).resolves.toEqual([record])
+    await expect(service.list()).resolves.toMatchObject([
+      {
+        action: 'init',
+        shellWrites: [
+          {
+            shell: 'fish',
+          },
+        ],
+      },
+    ])
   })
 })

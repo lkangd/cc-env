@@ -1,100 +1,119 @@
 import { CliError } from '../core/errors.js'
-import { envMapSchema, type EnvMap } from '../core/schema.js'
+import { envMapSchema, type EnvMap, type InitHistoryRecord } from '../core/schema.js'
+import type { ShellWriteRecord } from '../services/shell-env-service.js'
 
-type SettingsEnvService = {
-  read: () => Promise<EnvMap>
-  write: (env: EnvMap) => Promise<unknown>
+const requiredInitKeys = [
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_REASONING_MODEL',
+] as const
+
+type ClaudeSettingsEnvService = {
+  read: () => Promise<{
+    settings: { exists: boolean; env: EnvMap }
+    settingsLocal: { exists: boolean; env: EnvMap }
+  }>
+  write: (input: { settingsEnv: EnvMap; settingsLocalEnv: EnvMap }) => Promise<void>
 }
 
-type PresetService = {
-  write: (preset: {
-    name: string
-    createdAt: string
-    updatedAt: string
-    env: EnvMap
-  }) => Promise<unknown>
+type ShellEnvService = {
+  write: (env: EnvMap) => Promise<ShellWriteRecord[]>
 }
 
 type HistoryService = {
-  write: (record: {
-    timestamp: string
-    action: 'init'
-    movedKeys: string[]
-    backup: EnvMap
-    targetType: 'preset'
-    targetName: string
-  }) => Promise<unknown>
+  write: (record: InitHistoryRecord) => Promise<unknown>
 }
 
 type InitFlowResult = {
   selectedKeys: string[]
   confirmed?: boolean
-  presetName?: string
+}
+
+function omitKeys(env: EnvMap, keys: string[]): EnvMap {
+  return envMapSchema.parse(
+    Object.fromEntries(Object.entries(env).filter(([key]) => !keys.includes(key))),
+  )
 }
 
 export function createInitCommand({
-  settingsEnvService,
-  presetService,
+  claudeSettingsEnvService,
+  shellEnvService,
   historyService,
   renderFlow,
 }: {
-  settingsEnvService: SettingsEnvService
-  presetService: PresetService
+  claudeSettingsEnvService: ClaudeSettingsEnvService
+  shellEnvService: ShellEnvService
   historyService: HistoryService
   renderFlow: (context: {
     keys: string[]
+    requiredKeys: string[]
     yes: boolean
   }) => Promise<InitFlowResult | void> | InitFlowResult | void
 }) {
   return async function init({ yes = false }: { yes?: boolean } = {}): Promise<void> {
-    const currentEnv = await settingsEnvService.read()
-    const keys = Object.keys(currentEnv)
+    const sources = await claudeSettingsEnvService.read()
 
-    if (keys.length === 0) {
-      console.log('No env field found')
-      return
+    if (!sources.settings.exists && !sources.settingsLocal.exists) {
+      throw new CliError('Claude settings.json and settings.local.json were not found')
     }
 
-    const result = await renderFlow({ keys, yes })
+    const effectiveEnv = envMapSchema.parse({
+      ...sources.settings.env,
+      ...sources.settingsLocal.env,
+    })
+    const keys = Object.keys(effectiveEnv).sort()
+    const requiredKeys = requiredInitKeys.filter((key) => key in effectiveEnv)
+    const result = await renderFlow({ keys, requiredKeys, yes })
 
     if (!result?.confirmed) {
       return
     }
 
-    const migratedEntries = envMapSchema.parse(
+    const migratedEnv = envMapSchema.parse(
       Object.fromEntries(
         result.selectedKeys
-          .filter((key) => key in currentEnv)
-          .map((key) => [key, currentEnv[key]]),
+          .filter((key) => key in effectiveEnv)
+          .map((key) => [key, effectiveEnv[key]]),
       ),
     )
 
-    const remainingEntries = envMapSchema.parse(
-      Object.fromEntries(
-        Object.entries(currentEnv).filter(([key]) => !result.selectedKeys.includes(key)),
-      ),
-    )
-
-    if (!result.presetName) {
-      throw new CliError('A preset name is required')
+    if (Object.keys(migratedEnv).length === 0) {
+      throw new CliError('No selected env values found to migrate')
     }
 
-    const timestamp = new Date().toISOString()
+    const settingsBackup = envMapSchema.parse(
+      Object.fromEntries(
+        result.selectedKeys
+          .filter((key) => key in sources.settings.env)
+          .map((key) => [key, sources.settings.env[key]]),
+      ),
+    )
+    const settingsLocalBackup = envMapSchema.parse(
+      Object.fromEntries(
+        result.selectedKeys
+          .filter((key) => key in sources.settingsLocal.env)
+          .map((key) => [key, sources.settingsLocal.env[key]]),
+      ),
+    )
 
-    await presetService.write({
-      name: result.presetName,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      env: migratedEntries,
-    })
+    const timestamp = new Date().toISOString()
+    const shellWrites = await shellEnvService.write(migratedEnv)
+
     await historyService.write({
       timestamp,
       action: 'init',
-      movedKeys: result.selectedKeys,
-      backup: migratedEntries,
-      targetType: 'preset',
-      targetName: result.presetName,
+      migratedKeys: result.selectedKeys,
+      settingsBackup,
+      settingsLocalBackup,
+      shellWrites,
     })
-    await settingsEnvService.write(remainingEntries)
+
+    await claudeSettingsEnvService.write({
+      settingsEnv: omitKeys(sources.settings.env, result.selectedKeys),
+      settingsLocalEnv: omitKeys(sources.settingsLocal.env, result.selectedKeys),
+    })
   }
 }

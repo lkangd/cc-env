@@ -1,31 +1,26 @@
-export type InitFlowStep = 'keys' | 'target' | 'confirm' | 'done'
-export type InitFlowTarget = 'preset'
+export type InitFlowStep = 'keys' | 'confirm' | 'done'
 
 export type InitFlowState = {
   step: InitFlowStep
   availableKeys: string[]
+  requiredKeys: string[]
   selectedKeys: string[]
-  target?: InitFlowTarget
 }
 
 export type InitFlowAction =
-  | {
-      type: 'select-keys'
-      keys: string[]
-    }
-  | {
-      type: 'select-target'
-      target: InitFlowTarget
-    }
-  | {
-      type: 'confirm'
-    }
+  | { type: 'toggle-key'; key: string }
+  | { type: 'continue' }
+  | { type: 'confirm' }
 
-export function createInitFlowState(availableKeys: string[]): InitFlowState {
+export function createInitFlowState(
+  availableKeys: string[],
+  requiredKeys: string[],
+): InitFlowState {
   return {
     step: 'keys',
     availableKeys,
-    selectedKeys: [],
+    requiredKeys,
+    selectedKeys: requiredKeys,
   }
 }
 
@@ -33,40 +28,34 @@ export function advanceInitFlow(
   state: InitFlowState,
   action: InitFlowAction,
 ): InitFlowState {
-  switch (state.step) {
-    case 'keys':
-      if (action.type !== 'select-keys') {
-        return state
-      }
-
-      return {
-        ...state,
-        step: 'target',
-        selectedKeys: action.keys,
-      }
-
-    case 'target':
-      if (action.type !== 'select-target') {
-        return state
-      }
-
-      return {
-        ...state,
-        step: 'confirm',
-        target: action.target,
-      }
-
-    case 'confirm':
-      if (action.type !== 'confirm') {
-        return state
-      }
-
-      return {
-        ...state,
-        step: 'done',
-      }
-
-    case 'done':
+  if (state.step === 'keys' && action.type === 'toggle-key') {
+    if (state.requiredKeys.includes(action.key)) {
       return state
+    }
+
+    const selectedKeys = state.selectedKeys.includes(action.key)
+      ? state.selectedKeys.filter((key) => key !== action.key)
+      : [...state.selectedKeys, action.key]
+
+    return {
+      ...state,
+      selectedKeys,
+    }
   }
+
+  if (state.step === 'keys' && action.type === 'continue') {
+    return {
+      ...state,
+      step: 'confirm',
+    }
+  }
+
+  if (state.step === 'confirm' && action.type === 'confirm') {
+    return {
+      ...state,
+      step: 'done',
+    }
+  }
+
+  return state
 }
