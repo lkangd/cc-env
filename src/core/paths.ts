@@ -8,6 +8,22 @@ export function resolveConfigPath(globalRoot: string): string {
   return join(globalRoot, 'config.json')
 }
 
+export function resolveClaudeSettingsPath(homeDir = process.env.HOME ?? process.cwd()): string {
+  return join(homeDir, '.claude', 'settings.json')
+}
+
+export function resolveClaudeSettingsLocalPath(homeDir = process.env.HOME ?? process.cwd()): string {
+  return join(homeDir, '.claude', 'settings.local.json')
+}
+
+export function resolveShellConfigPaths(homeDir = process.env.HOME ?? process.cwd()) {
+  return {
+    zsh: join(homeDir, '.zshrc'),
+    bash: join(homeDir, '.bashrc'),
+    fish: join(homeDir, '.config', 'fish', 'config.fish'),
+  }
+}
+
 export function resolvePresetPath(globalRoot: string, name: string): string {
   return join(globalRoot, 'presets', `${name}.json`)
 }

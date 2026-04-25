@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import { execa } from 'execa'
 import { afterEach, describe, expect, it } from 'vitest'
 
+const cliEntryPath = join(process.cwd(), 'src', 'cli.ts')
+
 const tempRoots: string[] = []
 
 async function createCliFixture() {
@@ -59,7 +61,7 @@ afterEach(async () => {
 describe('cc-env CLI help', () => {
   it('shows the top-level commands in --help output', async () => {
     const { stdout } = await execa('npx', ['tsx', 'src/cli.ts', '--help'], {
-      cwd: '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1',
+      cwd: process.cwd(),
     })
 
     expect(stdout).toContain('run')
@@ -71,7 +73,7 @@ describe('cc-env CLI help', () => {
 
   it('shows the preset subcommands in help output', async () => {
     const { stdout } = await execa('npx', ['tsx', 'src/cli.ts', 'preset', '--help'], {
-      cwd: '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1',
+      cwd: process.cwd(),
     })
 
     expect(stdout).toContain('list')
@@ -83,11 +85,8 @@ describe('cc-env CLI help', () => {
   it('uses real HOME and cwd wiring for dry-run env resolution', async () => {
     const { homeDir, projectDir } = await createCliFixture()
     const { stdout } = await execa(
-      'node',
-      [
-        '--import',
-        '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1/node_modules/tsx/dist/loader.mjs',
-        '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1/src/cli.ts',
+      'npx',
+      ['tsx', cliEntryPath,
         'run',
         '--dry-run',
         'node',
@@ -109,15 +108,12 @@ describe('cc-env CLI help', () => {
 
   it('prints CliError messages without stack traces at the top level', async () => {
     const result = await execa(
-      'node',
-      [
-        '--import',
-        '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1/node_modules/tsx/dist/loader.mjs',
-        '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1/src/cli.ts',
+      'npx',
+      ['tsx', cliEntryPath,
         'run',
       ],
       {
-        cwd: '/Users/liangkangda/Fe-project/code/cc-env/.worktrees/cc-env-v1',
+        cwd: process.cwd(),
         reject: false,
       },
     )

@@ -4,29 +4,48 @@ import { createInitCommand } from '../../src/commands/init.js'
 import { createRestoreCommand } from '../../src/commands/restore.js'
 
 describe('createInitCommand', () => {
-  it('resolves successfully when selected keys move into a preset and settings are updated', async () => {
-    const settingsEnvService = {
+  it('migrates effective env from Claude settings into shell blocks and records per-file backups', async () => {
+    const claudeSettingsEnvService = {
       read: vi.fn().mockResolvedValue({
-        OPENAI_API_KEY: 'sk-123',
-        BASE_URL: 'https://api.openai.com',
+        settings: {
+          exists: true,
+          env: {
+            ANTHROPIC_BASE_URL: 'https://settings.example.com',
+          },
+        },
+        settingsLocal: {
+          exists: true,
+          env: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
+            ANTHROPIC_BASE_URL: 'https://local.example.com',
+          },
+        },
       }),
       write: vi.fn().mockResolvedValue(undefined),
     }
-    const presetService = {
-      write: vi.fn().mockResolvedValue(undefined),
+    const shellEnvService = {
+      write: vi.fn().mockResolvedValue([
+        {
+          shell: 'zsh',
+          filePath: '/Users/test/.zshrc',
+          env: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
+            ANTHROPIC_BASE_URL: 'https://local.example.com',
+          },
+        },
+      ]),
     }
     const historyService = {
       write: vi.fn().mockResolvedValue(undefined),
     }
     const renderFlow = vi.fn().mockResolvedValue({
-      selectedKeys: ['OPENAI_API_KEY'],
       confirmed: true,
-      presetName: 'openai',
+      selectedKeys: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
     })
 
     const init = createInitCommand({
-      settingsEnvService,
-      presetService,
+      claudeSettingsEnvService,
+      shellEnvService,
       historyService,
       renderFlow,
     })
@@ -34,53 +53,95 @@ describe('createInitCommand', () => {
     await expect(init({ yes: false })).resolves.toBeUndefined()
 
     expect(renderFlow).toHaveBeenCalledWith({
-      keys: ['OPENAI_API_KEY', 'BASE_URL'],
+      keys: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
+      requiredKeys: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
       yes: false,
     })
-    expect(presetService.write).toHaveBeenCalledWith({
-      name: 'openai',
-      createdAt: expect.any(String),
-      updatedAt: expect.any(String),
-      env: {
-        OPENAI_API_KEY: 'sk-123',
-      },
+    expect(shellEnvService.write).toHaveBeenCalledWith({
+      ANTHROPIC_AUTH_TOKEN: 'local-token',
+      ANTHROPIC_BASE_URL: 'https://local.example.com',
     })
     expect(historyService.write).toHaveBeenCalledWith({
       timestamp: expect.any(String),
       action: 'init',
-      movedKeys: ['OPENAI_API_KEY'],
-      backup: {
-        OPENAI_API_KEY: 'sk-123',
+      migratedKeys: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
+      settingsBackup: {
+        ANTHROPIC_BASE_URL: 'https://settings.example.com',
       },
-      targetType: 'preset',
-      targetName: 'openai',
+      settingsLocalBackup: {
+        ANTHROPIC_AUTH_TOKEN: 'local-token',
+        ANTHROPIC_BASE_URL: 'https://local.example.com',
+      },
+      shellWrites: [
+        {
+          shell: 'zsh',
+          filePath: '/Users/test/.zshrc',
+          env: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
+            ANTHROPIC_BASE_URL: 'https://local.example.com',
+          },
+        },
+      ],
     })
-    expect(settingsEnvService.write).toHaveBeenCalledWith({
-      BASE_URL: 'https://api.openai.com',
+    expect(claudeSettingsEnvService.write).toHaveBeenCalledWith({
+      settingsEnv: {},
+      settingsLocalEnv: {},
+    })
+  })
+
+  it('fails when both Claude settings files are missing', async () => {
+    const init = createInitCommand({
+      claudeSettingsEnvService: {
+        read: vi.fn().mockResolvedValue({
+          settings: { exists: false, env: {} },
+          settingsLocal: { exists: false, env: {} },
+        }),
+      },
+      shellEnvService: { write: vi.fn() },
+      historyService: { write: vi.fn() },
+      renderFlow: vi.fn(),
+    })
+
+    await expect(init({ yes: false })).rejects.toMatchObject({
+      message: 'Claude settings.json and settings.local.json were not found',
+      exitCode: 1,
     })
   })
 })
 
 describe('createRestoreCommand', () => {
-  it('restores a history record into settings', async () => {
+  it('restores an init record by removing shell keys and restoring both Claude settings files', async () => {
     const historyService = {
       list: vi.fn().mockResolvedValue([
         {
           timestamp: '2026-04-24T00:00:00.000Z',
           action: 'init',
-          targetType: 'preset',
-          targetName: 'openai',
-          backup: {
-            OPENAI_API_KEY: 'sk-123',
+          migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+          settingsBackup: {},
+          settingsLocalBackup: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
           },
+          shellWrites: [
+            {
+              shell: 'zsh',
+              filePath: '/Users/test/.zshrc',
+              env: {
+                ANTHROPIC_AUTH_TOKEN: 'local-token',
+              },
+            },
+          ],
         },
       ]),
     }
-    const settingsEnvService = {
+    const claudeSettingsEnvService = {
       read: vi.fn().mockResolvedValue({
-        BASE_URL: 'https://api.openai.com',
+        settings: { exists: true, env: {} },
+        settingsLocal: { exists: true, env: {} },
       }),
       write: vi.fn().mockResolvedValue(undefined),
+    }
+    const shellEnvService = {
+      removeKeys: vi.fn().mockResolvedValue(undefined),
     }
     const presetService = {
       read: vi.fn(),
@@ -89,47 +150,50 @@ describe('createRestoreCommand', () => {
     const renderFlow = vi.fn().mockResolvedValue({
       confirmed: true,
       timestamp: '2026-04-24T00:00:00.000Z',
-      targetType: 'settings',
     })
 
     const restore = createRestoreCommand({
       historyService,
-      settingsEnvService,
+      claudeSettingsEnvService,
+      shellEnvService,
+      settingsEnvService: {
+        read: vi.fn(),
+        write: vi.fn(),
+      },
       presetService,
       renderFlow,
     })
 
     await expect(restore({ yes: false })).resolves.toBeUndefined()
 
-    expect(historyService.list).toHaveBeenCalledWith()
-    expect(renderFlow).toHaveBeenCalledWith({
-      records: [
+    expect(shellEnvService.removeKeys).toHaveBeenCalledWith(
+      [
         {
-          timestamp: '2026-04-24T00:00:00.000Z',
-          action: 'init',
-          targetType: 'preset',
-          targetName: 'openai',
-          backup: {
-            OPENAI_API_KEY: 'sk-123',
+          shell: 'zsh',
+          filePath: '/Users/test/.zshrc',
+          env: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
           },
         },
       ],
-      yes: false,
-    })
-    expect(settingsEnvService.write).toHaveBeenCalledWith({
-      BASE_URL: 'https://api.openai.com',
-      OPENAI_API_KEY: 'sk-123',
+      ['ANTHROPIC_AUTH_TOKEN'],
+    )
+    expect(claudeSettingsEnvService.write).toHaveBeenCalledWith({
+      settingsEnv: {},
+      settingsLocalEnv: {
+        ANTHROPIC_AUTH_TOKEN: 'local-token',
+      },
     })
     expect(presetService.read).not.toHaveBeenCalled()
     expect(presetService.write).not.toHaveBeenCalled()
   })
 
-  it('restores a history record into a preset', async () => {
+  it('restores a non-init history record into a preset', async () => {
     const historyService = {
       list: vi.fn().mockResolvedValue([
         {
-          timestamp: '2026-04-24T00:00:00.000Z',
-          action: 'init',
+          timestamp: '2026-04-25T00:00:00.000Z',
+          action: 'restore',
           targetType: 'preset',
           targetName: 'openai',
           backup: {
@@ -155,13 +219,20 @@ describe('createRestoreCommand', () => {
     }
     const renderFlow = vi.fn().mockResolvedValue({
       confirmed: true,
-      timestamp: '2026-04-24T00:00:00.000Z',
+      timestamp: '2026-04-25T00:00:00.000Z',
       targetType: 'preset',
       targetName: 'openai',
     })
 
     const restore = createRestoreCommand({
       historyService,
+      claudeSettingsEnvService: {
+        read: vi.fn(),
+        write: vi.fn(),
+      },
+      shellEnvService: {
+        removeKeys: vi.fn(),
+      },
       settingsEnvService,
       presetService,
       renderFlow,

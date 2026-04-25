@@ -21,7 +21,12 @@ export function RestoreApp({ state }: { state: RestoreFlowState }) {
           Select target for {selectedRecord?.timestamp ?? 'record'}: settings or preset
         </Text>
       ) : null}
-      {state.step === 'confirm' ? (
+      {state.step === 'confirm' && selectedRecord?.action === 'init' ? (
+        <Text>
+          Confirm restore from {selectedRecord.timestamp} to Claude settings files and shell config
+        </Text>
+      ) : null}
+      {state.step === 'confirm' && selectedRecord?.action !== 'init' ? (
         <Text>
           Confirm restore from {selectedRecord?.timestamp ?? 'record'} to{' '}
           {state.targetType === 'preset'

@@ -26,23 +26,28 @@ import { toProcessEnvMap } from './core/process-env.js'
 import { CliError } from './core/errors.js'
 import { resolveGlobalRoot } from './core/paths.js'
 import { spawnCommand } from './core/spawn.js'
+import { createClaudeSettingsEnvService } from './services/claude-settings-env-service.js'
 import { createConfigService } from './services/config-service.js'
 import { createHistoryService } from './services/history-service.js'
 import { createPresetService } from './services/preset-service.js'
 import { createProjectEnvService } from './services/project-env-service.js'
 import { createRuntimeEnvService } from './services/runtime-env-service.js'
 import { createSettingsEnvService } from './services/settings-env-service.js'
+import { createShellEnvService } from './services/shell-env-service.js'
 
 const program = new Command()
 
 program.name('cc-env')
 
+const homeDir = process.env.HOME ?? process.cwd()
 const cwd = process.cwd()
 const settingsPath = join(cwd, 'settings.json')
 const globalRoot = resolveGlobalRoot()
 
 const configService = createConfigService(globalRoot)
+const claudeSettingsEnvService = createClaudeSettingsEnvService({ homeDir })
 const settingsEnvService = createSettingsEnvService({ settingsPath })
+const shellEnvService = createShellEnvService({ homeDir })
 const projectEnvService = createProjectEnvService({ cwd })
 const runtimeEnvService = createRuntimeEnvService()
 const presetService = createPresetService(globalRoot)
@@ -64,6 +69,21 @@ function runRestoreFlow(context: {
     type: 'select-record',
     timestamp: firstRecord.timestamp,
   })
+
+  if (firstRecord.action === 'init') {
+    render(h(RestoreApp, { state: selectedRecordState }))
+
+    const doneState = advanceRestoreFlow(selectedRecordState, { type: 'confirm' })
+    if (doneState.step !== 'done') {
+      return undefined
+    }
+
+    return {
+      confirmed: true,
+      timestamp: firstRecord.timestamp,
+    }
+  }
+
   const confirmState = advanceRestoreFlow(selectedRecordState, {
     type: 'select-target',
     targetType: firstRecord.targetType,
@@ -127,16 +147,18 @@ program.command('init')
   .option('-y, --yes')
   .action((options) =>
     createInitCommand({
-      settingsEnvService,
-      presetService,
+      claudeSettingsEnvService,
+      shellEnvService,
       historyService,
       renderFlow: async (context) => {
-        render(h(InitApp))
-        return {
-          selectedKeys: context.keys,
-          confirmed: context.yes,
-          presetName: 'default',
+        render(h(InitApp, context))
+        if (context.yes) {
+          return {
+            selectedKeys: context.requiredKeys,
+            confirmed: true,
+          }
         }
+        return undefined
       },
     })({
       yes: options.yes,
@@ -148,6 +170,8 @@ program.command('restore')
   .action((options) =>
     createRestoreCommand({
       historyService,
+      claudeSettingsEnvService,
+      shellEnvService,
       settingsEnvService,
       presetService,
       renderFlow: (context) => runRestoreFlow(context),

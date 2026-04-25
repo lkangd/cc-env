@@ -51,40 +51,60 @@ describe('sensitive masking', () => {
 })
 
 describe('historySchema', () => {
-  it('validates the full restore history shape including init-only movedKeys', () => {
+  it('accepts init history with per-file backups and shell writes', () => {
     const result = historySchema.parse({
       timestamp: '2026-04-24T12:00:00.000Z',
       action: 'init',
-      movedKeys: ['OPENAI_API_KEY'],
-      backup: {
-        OPENAI_API_KEY: 'sk-1234567890',
+      migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+      settingsBackup: {
+        ANTHROPIC_BASE_URL: 'https://settings.example.com',
       },
-      targetType: 'preset',
-      targetName: 'default',
+      settingsLocalBackup: {
+        ANTHROPIC_AUTH_TOKEN: 'local-token',
+      },
+      shellWrites: [
+        {
+          shell: 'zsh',
+          filePath: '/Users/test/.zshrc',
+          env: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
+          },
+        },
+      ],
     })
 
     expect(result).toEqual({
       timestamp: '2026-04-24T12:00:00.000Z',
       action: 'init',
-      movedKeys: ['OPENAI_API_KEY'],
-      backup: {
-        OPENAI_API_KEY: 'sk-1234567890',
+      migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+      settingsBackup: {
+        ANTHROPIC_BASE_URL: 'https://settings.example.com',
       },
-      targetType: 'preset',
-      targetName: 'default',
+      settingsLocalBackup: {
+        ANTHROPIC_AUTH_TOKEN: 'local-token',
+      },
+      shellWrites: [
+        {
+          shell: 'zsh',
+          filePath: '/Users/test/.zshrc',
+          env: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
+          },
+        },
+      ],
     })
   })
 
-  it('rejects init history without movedKeys', () => {
+  it('rejects init history without migratedKeys', () => {
     expect(() =>
       historySchema.parse({
         timestamp: '2026-04-24T12:00:00.000Z',
         action: 'init',
-        backup: {
-          OPENAI_API_KEY: 'sk-1234567890',
+        settingsBackup: {},
+        settingsLocalBackup: {
+          ANTHROPIC_AUTH_TOKEN: 'local-token',
         },
-        targetType: 'preset',
-        targetName: 'default',
+        shellWrites: [],
       }),
     ).toThrow()
   })

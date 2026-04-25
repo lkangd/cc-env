@@ -55,7 +55,7 @@ export function advanceRestoreFlow(
   action: RestoreFlowAction,
 ): RestoreFlowState {
   switch (state.step) {
-    case 'record':
+    case 'record': {
       if (action.type !== 'select-record') {
         return state
       }
@@ -68,11 +68,20 @@ export function advanceRestoreFlow(
         return state
       }
 
+      if (selectedRecord.action === 'init') {
+        return {
+          ...state,
+          step: 'confirm',
+          selectedTimestamp: action.timestamp,
+        } as RestoreFlowState
+      }
+
       return {
         ...state,
         step: 'target',
         selectedTimestamp: action.timestamp,
       }
+    }
 
     case 'target':
       if (action.type !== 'select-target' || !state.selectedTimestamp) {

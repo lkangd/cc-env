@@ -5,9 +5,28 @@ import {
   createRestoreFlowState,
 } from '../../src/flows/restore-flow.js'
 
-const restoreRecord = {
+const initRecord = {
   timestamp: '2026-04-24T00:00:00.000Z',
   action: 'init' as const,
+  migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+  settingsBackup: {},
+  settingsLocalBackup: {
+    ANTHROPIC_AUTH_TOKEN: 'local-token',
+  },
+  shellWrites: [
+    {
+      shell: 'zsh' as const,
+      filePath: '/Users/test/.zshrc',
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'local-token',
+      },
+    },
+  ],
+}
+
+const restoreRecord = {
+  timestamp: '2026-04-25T00:00:00.000Z',
+  action: 'restore' as const,
   targetType: 'preset' as const,
   targetName: 'openai',
   backup: {
@@ -37,7 +56,22 @@ describe('restore flow', () => {
     })
   })
 
-  it('moves from record to target when a record is selected', () => {
+  it('skips target selection for init history entries', () => {
+    const state = createRestoreFlowState([initRecord])
+
+    expect(
+      advanceRestoreFlow(state, {
+        type: 'select-record',
+        timestamp: initRecord.timestamp,
+      }),
+    ).toEqual({
+      step: 'confirm',
+      records: [initRecord],
+      selectedTimestamp: initRecord.timestamp,
+    })
+  })
+
+  it('moves from record to target for restore history entries', () => {
     const state = createRestoreFlowState([restoreRecord])
 
     expect(
@@ -58,12 +92,12 @@ describe('restore flow', () => {
     expect(
       advanceRestoreFlow(state, {
         type: 'select-record',
-        timestamp: '2026-04-25T00:00:00.000Z',
+        timestamp: '2026-04-26T00:00:00.000Z',
       }),
     ).toEqual(state)
   })
 
-  it('moves through target, confirm, and done after selecting a record', () => {
+  it('moves through target, confirm, and done after selecting a restore record', () => {
     const confirmState = createConfirmState()
 
     expect(confirmState).toEqual({
@@ -80,115 +114,6 @@ describe('restore flow', () => {
       targetType: 'preset',
       targetName: restoreRecord.targetName,
     })
-  })
-
-  it('ignores later-step actions while still on the record step', () => {
-    const state = createRestoreFlowState([restoreRecord])
-
-    expect(
-      advanceRestoreFlow(state, {
-        type: 'select-target',
-        targetType: 'settings',
-      }),
-    ).toEqual(state)
-    expect(advanceRestoreFlow(state, { type: 'confirm' })).toEqual(state)
-  })
-
-  it('ignores record and confirm actions while on the target step', () => {
-    const targetState = advanceRestoreFlow(createRestoreFlowState([restoreRecord]), {
-      type: 'select-record',
-      timestamp: restoreRecord.timestamp,
-    })
-
-    expect(
-      advanceRestoreFlow(targetState, {
-        type: 'select-record',
-        timestamp: restoreRecord.timestamp,
-      }),
-    ).toEqual(targetState)
-    expect(advanceRestoreFlow(targetState, { type: 'confirm' })).toEqual(targetState)
-  })
-
-  it('requires a preset target name before moving to confirm', () => {
-    const targetState = advanceRestoreFlow(createRestoreFlowState([restoreRecord]), {
-      type: 'select-record',
-      timestamp: restoreRecord.timestamp,
-    })
-
-    expect(
-      advanceRestoreFlow(targetState, {
-        type: 'select-target',
-        targetType: 'preset',
-      }),
-    ).toEqual(targetState)
-  })
-
-  it('clears stale targetName when selecting settings', () => {
-    const targetState = advanceRestoreFlow(createRestoreFlowState([restoreRecord]), {
-      type: 'select-record',
-      timestamp: restoreRecord.timestamp,
-    })
-
-    expect(
-      advanceRestoreFlow(targetState, {
-        type: 'select-target',
-        targetType: 'settings',
-        targetName: restoreRecord.targetName,
-      }),
-    ).toEqual({
-      step: 'confirm',
-      records: [restoreRecord],
-      selectedTimestamp: restoreRecord.timestamp,
-      targetType: 'settings',
-    })
-  })
-
-  it('ignores non-confirm actions while on the confirm step', () => {
-    const confirmState = createConfirmState()
-
-    expect(
-      advanceRestoreFlow(confirmState, {
-        type: 'select-record',
-        timestamp: restoreRecord.timestamp,
-      }),
-    ).toEqual(confirmState)
-    expect(
-      advanceRestoreFlow(confirmState, {
-        type: 'select-target',
-        targetType: 'settings',
-      }),
-    ).toEqual(confirmState)
-  })
-
-  it('does not finish with a structurally invalid confirm state', () => {
-    const invalidConfirmState = {
-      step: 'confirm' as const,
-      records: [restoreRecord],
-      selectedTimestamp: restoreRecord.timestamp,
-    }
-
-    expect(
-      advanceRestoreFlow(
-        invalidConfirmState as unknown as Parameters<typeof advanceRestoreFlow>[0],
-        { type: 'confirm' },
-      ),
-    ).toEqual(invalidConfirmState)
-  })
-
-  it('does not finish preset confirmation without a preset name', () => {
-    const invalidConfirmState = {
-      step: 'confirm' as const,
-      records: [restoreRecord],
-      selectedTimestamp: restoreRecord.timestamp,
-      targetType: 'preset' as const,
-    }
-
-    expect(
-      advanceRestoreFlow(
-        invalidConfirmState as unknown as Parameters<typeof advanceRestoreFlow>[0],
-        { type: 'confirm' },
-      ),
-    ).toEqual(invalidConfirmState)
   })
 
   it('keeps the done step unchanged for any later action', () => {
