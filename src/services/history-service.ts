@@ -32,7 +32,7 @@ export function createHistoryService(globalRoot: string) {
         const fileNames = entries
           .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
           .map((entry) => entry.name)
-          .sort()
+          .sort((a, b) => b.localeCompare(a))
 
         return Promise.all(
           fileNames.map(async (fileName) => {

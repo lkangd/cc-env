@@ -1,5 +1,6 @@
 import { CliError } from '../core/errors.js'
-import { envMapSchema, type EnvMap, type InitHistoryRecord } from '../core/schema.js'
+import { resolveClaudeSettingsLocalPath, resolveClaudeSettingsPath } from '../core/paths.js'
+import { envMapSchema, type EnvMap, type InitHistoryRecord, type SourceEntry } from '../core/schema.js'
 import type { ShellWriteRecord } from '../services/shell-env-service.js'
 
 const requiredInitKeys = [
@@ -43,6 +44,8 @@ export function createInitCommand({
   shellEnvService,
   historyService,
   renderFlow,
+  homeDir,
+  stdout = process.stdout,
 }: {
   claudeSettingsEnvService: ClaudeSettingsEnvService
   shellEnvService: ShellEnvService
@@ -51,7 +54,10 @@ export function createInitCommand({
     keys: string[]
     requiredKeys: string[]
     yes: boolean
+    sourceFiles: string[]
   }) => Promise<InitFlowResult | void> | InitFlowResult | void
+  homeDir?: string
+  stdout?: Pick<NodeJS.WriteStream, 'write'>
 }) {
   return async function init({ yes = false }: { yes?: boolean } = {}): Promise<void> {
     const sources = await claudeSettingsEnvService.read()
@@ -66,7 +72,10 @@ export function createInitCommand({
     })
     const keys = Object.keys(effectiveEnv).sort()
     const requiredKeys = requiredInitKeys.filter((key) => key in effectiveEnv)
-    const result = await renderFlow({ keys, requiredKeys, yes })
+    const settingsPath = resolveClaudeSettingsPath(homeDir)
+    const settingsLocalPath = resolveClaudeSettingsLocalPath(homeDir)
+    const sourceFiles = [settingsPath, settingsLocalPath]
+    const result = await renderFlow({ keys, requiredKeys, yes, sourceFiles })
 
     if (!result?.confirmed) {
       return
@@ -99,6 +108,11 @@ export function createInitCommand({
       ),
     )
 
+    const initSources: SourceEntry[] = [
+      { file: settingsPath, backup: settingsBackup },
+      { file: settingsLocalPath, backup: settingsLocalBackup },
+    ]
+
     const timestamp = new Date().toISOString()
     const shellWrites = await shellEnvService.write(migratedEnv)
 
@@ -106,8 +120,7 @@ export function createInitCommand({
       timestamp,
       action: 'init',
       migratedKeys: result.selectedKeys,
-      settingsBackup,
-      settingsLocalBackup,
+      sources: initSources,
       shellWrites,
     })
 
@@ -115,5 +128,8 @@ export function createInitCommand({
       settingsEnv: omitKeys(sources.settings.env, result.selectedKeys),
       settingsLocalEnv: omitKeys(sources.settingsLocal.env, result.selectedKeys),
     })
+    stdout.write(
+      '\nInit complete\n\x1b[1;32mPlease restart your terminal for the migrated environment variables to take effect.\x1b[0m\n',
+    )
   }
 }

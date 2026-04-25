@@ -22,12 +22,16 @@ const shellWriteSchema = z.object({
   env: envMapSchema,
 })
 
+const sourceEntrySchema = z.object({
+  file: z.string(),
+  backup: envMapSchema,
+})
+
 const initHistorySchema = z.object({
   timestamp: z.string().datetime({ offset: true }),
   action: z.literal('init'),
   migratedKeys: z.array(envKeySchema),
-  settingsBackup: envMapSchema,
-  settingsLocalBackup: envMapSchema,
+  sources: z.array(sourceEntrySchema),
   shellWrites: z.array(shellWriteSchema),
 })
 
@@ -49,6 +53,7 @@ export const configSchema = z.object({
 })
 
 export type EnvMap = z.infer<typeof envMapSchema>
+export type SourceEntry = z.infer<typeof sourceEntrySchema>
 export type Preset = z.infer<typeof presetSchema>
 export type InitHistoryRecord = z.infer<typeof initHistorySchema>
 export type HistoryRecord = z.infer<typeof historySchema>

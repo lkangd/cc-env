@@ -9,10 +9,18 @@ const initRecord = {
   timestamp: '2026-04-24T00:00:00.000Z',
   action: 'init' as const,
   migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
-  settingsBackup: {},
-  settingsLocalBackup: {
-    ANTHROPIC_AUTH_TOKEN: 'local-token',
-  },
+  sources: [
+    {
+      file: '/Users/test/.claude/settings.json',
+      backup: {},
+    },
+    {
+      file: '/Users/test/.claude/settings.local.json',
+      backup: {
+        ANTHROPIC_AUTH_TOKEN: 'local-token',
+      },
+    },
+  ],
   shellWrites: [
     {
       shell: 'zsh' as const,

@@ -111,19 +111,6 @@ async function runRestoreFlow(context: {
     return undefined
   }
 
-  const selectedRecordState = advanceRestoreFlow(state, {
-    type: 'select-record',
-    timestamp: firstRecord.timestamp,
-  })
-  const interactiveState =
-    firstRecord.action === 'init'
-      ? selectedRecordState
-      : advanceRestoreFlow(selectedRecordState, {
-          type: 'select-target',
-          targetType: firstRecord.targetType,
-          ...(firstRecord.targetType === 'preset' ? { targetName: firstRecord.targetName } : {}),
-        })
-
   let result:
     | {
         confirmed: boolean
@@ -135,7 +122,7 @@ async function runRestoreFlow(context: {
 
   const app = render(
     h(RestoreApp, {
-      state: interactiveState,
+      state,
       onSubmit: (value) => {
         result = value
       },
@@ -178,6 +165,7 @@ program.command('init')
       claudeSettingsEnvService,
       shellEnvService,
       historyService,
+      homeDir,
       renderFlow: async (context) => {
         if (context.yes) {
           return {
@@ -219,6 +207,7 @@ program.command('restore')
       shellEnvService,
       settingsEnvService,
       presetService,
+      homeDir,
       renderFlow: (context) => runRestoreFlow(context),
     })({
       yes: options.yes,

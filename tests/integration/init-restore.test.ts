@@ -47,7 +47,9 @@ describe('createInitCommand', () => {
       claudeSettingsEnvService,
       shellEnvService,
       historyService,
+      homeDir: '/Users/test',
       renderFlow,
+      stdout: { write: vi.fn() },
     })
 
     await expect(init({ yes: false })).resolves.toBeUndefined()
@@ -55,6 +57,7 @@ describe('createInitCommand', () => {
     expect(renderFlow).toHaveBeenCalledWith({
       keys: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
       requiredKeys: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
+      sourceFiles: ['/Users/test/.claude/settings.json', '/Users/test/.claude/settings.local.json'],
       yes: false,
     })
     expect(shellEnvService.write).toHaveBeenCalledWith({
@@ -65,13 +68,21 @@ describe('createInitCommand', () => {
       timestamp: expect.any(String),
       action: 'init',
       migratedKeys: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
-      settingsBackup: {
-        ANTHROPIC_BASE_URL: 'https://settings.example.com',
-      },
-      settingsLocalBackup: {
-        ANTHROPIC_AUTH_TOKEN: 'local-token',
-        ANTHROPIC_BASE_URL: 'https://local.example.com',
-      },
+      sources: [
+        {
+          file: '/Users/test/.claude/settings.json',
+          backup: {
+            ANTHROPIC_BASE_URL: 'https://settings.example.com',
+          },
+        },
+        {
+          file: '/Users/test/.claude/settings.local.json',
+          backup: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
+            ANTHROPIC_BASE_URL: 'https://local.example.com',
+          },
+        },
+      ],
       shellWrites: [
         {
           shell: 'zsh',
@@ -96,10 +107,13 @@ describe('createInitCommand', () => {
           settings: { exists: false, env: {} },
           settingsLocal: { exists: false, env: {} },
         }),
+        write: vi.fn(),
       },
       shellEnvService: { write: vi.fn() },
       historyService: { write: vi.fn() },
+      homeDir: '/Users/test',
       renderFlow: vi.fn(),
+      stdout: { write: vi.fn() },
     })
 
     await expect(init({ yes: false })).rejects.toMatchObject({
@@ -117,10 +131,18 @@ describe('createRestoreCommand', () => {
           timestamp: '2026-04-24T00:00:00.000Z',
           action: 'init',
           migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
-          settingsBackup: {},
-          settingsLocalBackup: {
-            ANTHROPIC_AUTH_TOKEN: 'local-token',
-          },
+          sources: [
+            {
+              file: '/Users/test/.claude/settings.json',
+              backup: {},
+            },
+            {
+              file: '/Users/test/.claude/settings.local.json',
+              backup: {
+                ANTHROPIC_AUTH_TOKEN: 'local-token',
+              },
+            },
+          ],
           shellWrites: [
             {
               shell: 'zsh',
@@ -161,6 +183,7 @@ describe('createRestoreCommand', () => {
         write: vi.fn(),
       },
       presetService,
+      homeDir: '/Users/test',
       renderFlow,
     })
 
@@ -186,6 +209,121 @@ describe('createRestoreCommand', () => {
     })
     expect(presetService.read).not.toHaveBeenCalled()
     expect(presetService.write).not.toHaveBeenCalled()
+  })
+
+  it('restores the selected latest init record including extra migrated keys', async () => {
+    const historyService = {
+      list: vi.fn().mockResolvedValue([
+        {
+          timestamp: '2026-04-24T00:00:00.000Z',
+          action: 'init',
+          migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+          sources: [
+            {
+              file: '/Users/test/.claude/settings.json',
+              backup: {},
+            },
+            {
+              file: '/Users/test/.claude/settings.local.json',
+              backup: {
+                ANTHROPIC_AUTH_TOKEN: 'old-local-token',
+              },
+            },
+          ],
+          shellWrites: [
+            {
+              shell: 'fish',
+              filePath: '/Users/test/.config/fish/config.fish',
+              env: {
+                ANTHROPIC_AUTH_TOKEN: 'old-local-token',
+              },
+            },
+          ],
+        },
+        {
+          timestamp: '2026-04-25T00:00:00.000Z',
+          action: 'init',
+          migratedKeys: ['ANTHROPIC_AUTH_TOKEN', 'API_TIMEOUT_MS'],
+          sources: [
+            {
+              file: '/Users/test/.claude/settings.json',
+              backup: {},
+            },
+            {
+              file: '/Users/test/.claude/settings.local.json',
+              backup: {
+                ANTHROPIC_AUTH_TOKEN: 'local-token',
+                API_TIMEOUT_MS: '3000000',
+              },
+            },
+          ],
+          shellWrites: [
+            {
+              shell: 'fish',
+              filePath: '/Users/test/.config/fish/config.fish',
+              env: {
+                ANTHROPIC_AUTH_TOKEN: 'local-token',
+                API_TIMEOUT_MS: '3000000',
+              },
+            },
+          ],
+        },
+      ]),
+    }
+    const claudeSettingsEnvService = {
+      read: vi.fn().mockResolvedValue({
+        settings: { exists: true, env: {} },
+        settingsLocal: { exists: true, env: {} },
+      }),
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const shellEnvService = {
+      removeKeys: vi.fn().mockResolvedValue(undefined),
+    }
+    const presetService = {
+      read: vi.fn(),
+      write: vi.fn(),
+    }
+    const renderFlow = vi.fn().mockResolvedValue({
+      confirmed: true,
+      timestamp: '2026-04-25T00:00:00.000Z',
+    })
+
+    const restore = createRestoreCommand({
+      historyService,
+      claudeSettingsEnvService,
+      shellEnvService,
+      settingsEnvService: {
+        read: vi.fn(),
+        write: vi.fn(),
+      },
+      presetService,
+      homeDir: '/Users/test',
+      renderFlow,
+    })
+
+    await expect(restore({ yes: false })).resolves.toBeUndefined()
+
+    expect(shellEnvService.removeKeys).toHaveBeenCalledWith(
+      [
+        {
+          shell: 'fish',
+          filePath: '/Users/test/.config/fish/config.fish',
+          env: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
+            API_TIMEOUT_MS: '3000000',
+          },
+        },
+      ],
+      ['ANTHROPIC_AUTH_TOKEN', 'API_TIMEOUT_MS'],
+    )
+    expect(claudeSettingsEnvService.write).toHaveBeenCalledWith({
+      settingsEnv: {},
+      settingsLocalEnv: {
+        ANTHROPIC_AUTH_TOKEN: 'local-token',
+        API_TIMEOUT_MS: '3000000',
+      },
+    })
   })
 
   it('restores a non-init history record into a preset', async () => {
@@ -235,6 +373,7 @@ describe('createRestoreCommand', () => {
       },
       settingsEnvService,
       presetService,
+      homeDir: '/Users/test',
       renderFlow,
     })
 

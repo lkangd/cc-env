@@ -146,10 +146,18 @@ describe('history service', () => {
       timestamp: '2026-04-24T10:00:00.000Z',
       action: 'init',
       migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
-      settingsBackup: {},
-      settingsLocalBackup: {
-        ANTHROPIC_AUTH_TOKEN: 'local-token',
-      },
+      sources: [
+        {
+          file: '/Users/test/.claude/settings.json',
+          backup: {},
+        },
+        {
+          file: '/Users/test/.claude/settings.local.json',
+          backup: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
+          },
+        },
+      ],
       shellWrites: [
         {
           shell: 'fish',

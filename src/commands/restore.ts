@@ -1,4 +1,5 @@
 import { CliError } from '../core/errors.js'
+import { resolveClaudeSettingsLocalPath, resolveClaudeSettingsPath } from '../core/paths.js'
 import type { EnvMap, HistoryRecord, Preset } from '../core/schema.js'
 import type { ShellWriteRecord } from '../services/shell-env-service.js'
 
@@ -42,6 +43,7 @@ export function createRestoreCommand({
   settingsEnvService,
   presetService,
   renderFlow,
+  homeDir,
   stdout = process.stdout,
 }: {
   historyService: HistoryService
@@ -53,6 +55,7 @@ export function createRestoreCommand({
     records: HistoryRecord[]
     yes: boolean
   }) => Promise<RestoreFlowResult | void> | RestoreFlowResult | void
+  homeDir?: string
   stdout?: Pick<NodeJS.WriteStream, 'write'>
 }) {
   return async function restore({ yes = false }: { yes?: boolean } = {}): Promise<void> {
@@ -70,19 +73,24 @@ export function createRestoreCommand({
     }
 
     if (record.action === 'init') {
+      const settingsPath = resolveClaudeSettingsPath(homeDir)
+      const settingsLocalPath = resolveClaudeSettingsLocalPath(homeDir)
+      const settingsSource = record.sources.find((s) => s.file === settingsPath)
+      const settingsLocalSource = record.sources.find((s) => s.file === settingsLocalPath)
+
       const current = await claudeSettingsEnvService.read()
       await shellEnvService.removeKeys(record.shellWrites, record.migratedKeys)
       await claudeSettingsEnvService.write({
         settingsEnv: {
           ...current.settings.env,
-          ...record.settingsBackup,
+          ...(settingsSource?.backup ?? {}),
         },
         settingsLocalEnv: {
           ...current.settingsLocal.env,
-          ...record.settingsLocalBackup,
+          ...(settingsLocalSource?.backup ?? {}),
         },
       })
-      stdout.write('Restore complete\n')
+      stdout.write('\nRestore complete\n')
       return
     }
 
@@ -92,7 +100,7 @@ export function createRestoreCommand({
         ...currentSettings,
         ...record.backup,
       })
-      stdout.write('Restore complete\n')
+      stdout.write('\nRestore complete\n')
       return
     }
 
@@ -107,6 +115,6 @@ export function createRestoreCommand({
         ...record.backup,
       },
     })
-    stdout.write('Restore complete\n')
+    stdout.write('\nRestore complete\n')
   }
 }

@@ -65,17 +65,25 @@ describe('sensitive masking', () => {
 })
 
 describe('historySchema', () => {
-  it('accepts init history with per-file backups and shell writes', () => {
+  it('accepts init history with sources and shell writes', () => {
     const result = historySchema.parse({
       timestamp: '2026-04-24T12:00:00.000Z',
       action: 'init',
       migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
-      settingsBackup: {
-        ANTHROPIC_BASE_URL: 'https://settings.example.com',
-      },
-      settingsLocalBackup: {
-        ANTHROPIC_AUTH_TOKEN: 'local-token',
-      },
+      sources: [
+        {
+          file: '/Users/test/.claude/settings.json',
+          backup: {
+            ANTHROPIC_BASE_URL: 'https://settings.example.com',
+          },
+        },
+        {
+          file: '/Users/test/.claude/settings.local.json',
+          backup: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
+          },
+        },
+      ],
       shellWrites: [
         {
           shell: 'zsh',
@@ -91,12 +99,20 @@ describe('historySchema', () => {
       timestamp: '2026-04-24T12:00:00.000Z',
       action: 'init',
       migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
-      settingsBackup: {
-        ANTHROPIC_BASE_URL: 'https://settings.example.com',
-      },
-      settingsLocalBackup: {
-        ANTHROPIC_AUTH_TOKEN: 'local-token',
-      },
+      sources: [
+        {
+          file: '/Users/test/.claude/settings.json',
+          backup: {
+            ANTHROPIC_BASE_URL: 'https://settings.example.com',
+          },
+        },
+        {
+          file: '/Users/test/.claude/settings.local.json',
+          backup: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
+          },
+        },
+      ],
       shellWrites: [
         {
           shell: 'zsh',
@@ -114,10 +130,14 @@ describe('historySchema', () => {
       historySchema.parse({
         timestamp: '2026-04-24T12:00:00.000Z',
         action: 'init',
-        settingsBackup: {},
-        settingsLocalBackup: {
-          ANTHROPIC_AUTH_TOKEN: 'local-token',
-        },
+        sources: [
+          {
+            file: '/Users/test/.claude/settings.local.json',
+            backup: {
+              ANTHROPIC_AUTH_TOKEN: 'local-token',
+            },
+          },
+        ],
         shellWrites: [],
       }),
     ).toThrow()

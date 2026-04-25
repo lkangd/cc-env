@@ -12,7 +12,7 @@ const cliEntry = join(repoRoot, 'src/cli.ts')
 
 const tempRoots: string[] = []
 
-async function createRestoreFixture() {
+async function createRestoreFixture({ latestIncludesExtraKey = false }: { latestIncludesExtraKey?: boolean } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'cc-env-restore-cli-'))
   tempRoots.push(root)
 
@@ -36,6 +36,7 @@ async function createRestoreFixture() {
     [
       '# >>> cc-env >>>',
       'set -gx ANTHROPIC_AUTH_TOKEN "local-token"',
+      ...(latestIncludesExtraKey ? ['set -gx API_TIMEOUT_MS "3000000"'] : []),
       '# <<< cc-env <<<',
       '',
     ].join('\n'),
@@ -47,10 +48,18 @@ async function createRestoreFixture() {
       timestamp: '2026-04-24T12:00:00.000Z',
       action: 'init',
       migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
-      settingsBackup: {},
-      settingsLocalBackup: {
-        ANTHROPIC_AUTH_TOKEN: 'local-token',
-      },
+      sources: [
+        {
+          file: join(homeDir, '.claude', 'settings.json'),
+          backup: {},
+        },
+        {
+          file: join(homeDir, '.claude', 'settings.local.json'),
+          backup: {
+            ANTHROPIC_AUTH_TOKEN: 'local-token',
+          },
+        },
+      ],
       shellWrites: [
         {
           shell: 'fish',
@@ -63,6 +72,41 @@ async function createRestoreFixture() {
     }, null, 2)}\n`,
     'utf8',
   )
+
+  if (latestIncludesExtraKey) {
+    await writeFile(
+      join(homeDir, '.cc-env', 'history', '2026-04-25T12-00-00.000Z.json'),
+      `${JSON.stringify({
+        timestamp: '2026-04-25T12:00:00.000Z',
+        action: 'init',
+        migratedKeys: ['ANTHROPIC_AUTH_TOKEN', 'API_TIMEOUT_MS'],
+        sources: [
+          {
+            file: join(homeDir, '.claude', 'settings.json'),
+            backup: {},
+          },
+          {
+            file: join(homeDir, '.claude', 'settings.local.json'),
+            backup: {
+              ANTHROPIC_AUTH_TOKEN: 'local-token',
+              API_TIMEOUT_MS: '3000000',
+            },
+          },
+        ],
+        shellWrites: [
+          {
+            shell: 'fish',
+            filePath: join(homeDir, '.config', 'fish', 'config.fish'),
+            env: {
+              ANTHROPIC_AUTH_TOKEN: 'local-token',
+              API_TIMEOUT_MS: '3000000',
+            },
+          },
+        ],
+      }, null, 2)}\n`,
+      'utf8',
+    )
+  }
 
   return { homeDir }
 }
@@ -96,5 +140,33 @@ describe('cc-env CLI restore', () => {
       ANTHROPIC_AUTH_TOKEN: 'local-token',
     })
     expect(fishConfig).not.toContain('ANTHROPIC_AUTH_TOKEN')
+  })
+
+  it('restores the latest init record with extra migrated keys when using --yes', async () => {
+    const { homeDir } = await createRestoreFixture({ latestIncludesExtraKey: true })
+
+    await execa(
+      'node',
+      ['--import', tsxLoader, cliEntry, 'restore', '--yes'],
+      {
+        cwd: repoRoot,
+        env: {
+          HOME: homeDir,
+        },
+      },
+    )
+
+    const settingsLocal = JSON.parse(
+      await readFile(join(homeDir, '.claude', 'settings.local.json'), 'utf8'),
+    ) as { env?: Record<string, string> }
+    const fishConfig = await readFile(join(homeDir, '.config', 'fish', 'config.fish'), 'utf8')
+
+    expect(settingsLocal.env).toEqual({
+      ANTHROPIC_AUTH_TOKEN: 'local-token',
+      API_TIMEOUT_MS: '3000000',
+    })
+    expect(fishConfig).not.toContain('ANTHROPIC_AUTH_TOKEN')
+    expect(fishConfig).not.toContain('API_TIMEOUT_MS')
+    expect(fishConfig).not.toContain('# >>> cc-env >>>')
   })
 })

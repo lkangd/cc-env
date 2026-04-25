@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 
-import { formatRestorePreview } from '../core/format.js'
 import { advanceRestoreFlow, type RestoreFlowState } from '../flows/restore-flow.js'
 
 export function RestoreApp({
@@ -18,23 +17,45 @@ export function RestoreApp({
 }) {
   const { exit } = useApp()
   const [currentState, setCurrentState] = useState(state)
+  const [cursor, setCursor] = useState(0)
+  const recordAtCursor = currentState.records[cursor]
   const selectedRecord = currentState.records.find(
     (record) => record.timestamp === currentState.selectedTimestamp,
   )
-  const activeRecord = selectedRecord ?? currentState.records[0]
-  const restorePreview = activeRecord
-    ? formatRestorePreview(
-        activeRecord.action === 'init'
-          ? {
-              ...activeRecord.settingsBackup,
-              ...activeRecord.settingsLocalBackup,
-            }
-          : activeRecord.backup,
-      )
-    : ''
+  const activeRecord = currentState.step === 'record'
+    ? recordAtCursor
+    : selectedRecord ?? currentState.records[0]
+  const restoreEntries = useMemo(
+    () =>
+      activeRecord
+        ? Object.entries(
+            activeRecord.action === 'init'
+              ? Object.fromEntries(activeRecord.sources.flatMap((s) => Object.entries(s.backup)))
+              : activeRecord.backup,
+          ).sort(([left], [right]) => left.localeCompare(right))
+        : [],
+    [activeRecord],
+  )
+
+  const fromFiles = useMemo(() => {
+    if (!activeRecord || activeRecord.action !== 'init') {
+      return []
+    }
+
+    return activeRecord.shellWrites.map((sw) => sw.filePath)
+  }, [activeRecord])
+
+  const toFiles = useMemo(() => {
+    if (!activeRecord || activeRecord.action !== 'init') {
+      return []
+    }
+
+    return activeRecord.sources.map((s) => s.file)
+  }, [activeRecord])
 
   useEffect(() => {
     setCurrentState(state)
+    setCursor(0)
   }, [state])
 
   useEffect(() => {
@@ -57,6 +78,18 @@ export function RestoreApp({
       onSubmit({ confirmed: false })
       exit()
       return
+    }
+
+    if (currentState.step === 'record') {
+      if (key.upArrow || input === 'k') {
+        setCursor((value) => Math.max(0, value - 1))
+        return
+      }
+
+      if (key.downArrow || input === 'j') {
+        setCursor((value) => Math.min(currentState.records.length - 1, value + 1))
+        return
+      }
     }
 
     if (!key.return || !activeRecord) {
@@ -107,9 +140,63 @@ export function RestoreApp({
     <Box flexDirection="column">
       <Text>Restore record</Text>
       {currentState.step === 'record' ? (
-        <Text>
-          Select record: {currentState.records[0]?.timestamp ?? 'no history available'}
-        </Text>
+        <>
+          <Text dimColor>↑/k ↓/j navigate · enter confirm · q cancel</Text>
+          <Box marginTop={1}>
+            <Box flexDirection="column" width={28} marginRight={2}>
+              <Text bold color="cyan">History</Text>
+              <Box flexDirection="column" marginTop={1}>
+                {currentState.records.map((record, index) => (
+                  <Text key={record.timestamp}>
+                    {index === cursor ? '❯ ' : '  '}
+                    {record.timestamp}
+                  </Text>
+                ))}
+              </Box>
+            </Box>
+            <Box flexDirection="column" flexGrow={1} borderStyle="round" borderColor="green" paddingX={1}>
+              <Text bold color="green">Preview</Text>
+              {activeRecord?.action === 'init' ? (
+                <Box flexDirection="column">
+                  {fromFiles.length > 0 ? (
+                    <Box flexDirection="column">
+                      <Text dimColor>From:</Text>
+                      {fromFiles.map((file) => (
+                        <Text key={file} color="cyan">  {file}</Text>
+                      ))}
+                    </Box>
+                  ) : null}
+                  {toFiles.length > 0 ? (
+                    <Box flexDirection="column">
+                      <Text dimColor>To:</Text>
+                      {toFiles.map((file) => (
+                        <Text key={file} color="cyan">  {file}</Text>
+                      ))}
+                    </Box>
+                  ) : null}
+                </Box>
+              ) : (
+                <Text dimColor>
+                  Restore to {activeRecord?.targetType === 'preset' ? `preset ${activeRecord.targetName}` : activeRecord?.targetType ?? 'settings'}
+                </Text>
+              )}
+              <Box flexDirection="column" marginTop={1}>
+                {restoreEntries.length === 0 ? (
+                  <Text dimColor>none</Text>
+                ) : (
+                  restoreEntries.map(([key, value]) => (
+                    <Box key={key}>
+                      <Text color="yellow">• </Text>
+                      <Text color="magenta">{key}</Text>
+                      <Text dimColor>=</Text>
+                      <Text color="white">{value}</Text>
+                    </Box>
+                  ))
+                )}
+              </Box>
+            </Box>
+          </Box>
+        </>
       ) : null}
       {currentState.step === 'target' ? (
         <Text>
@@ -117,28 +204,76 @@ export function RestoreApp({
         </Text>
       ) : null}
       {currentState.step === 'confirm' && selectedRecord?.action === 'init' ? (
-        <>
+        <Box flexDirection="column" marginTop={1}>
           <Text>
-            Confirm restore from {selectedRecord.timestamp} to Claude settings files and shell config
+            Confirm restore from <Text color="cyan">{selectedRecord.timestamp}</Text>
           </Text>
-          <Text>Will restore:</Text>
-          <Text>{restorePreview || 'none'}</Text>
-        </>
+          {fromFiles.length > 0 ? (
+            <Box flexDirection="column">
+              <Text dimColor>From:</Text>
+              {fromFiles.map((file) => (
+                <Text key={file} color="cyan">  {file}</Text>
+              ))}
+            </Box>
+          ) : null}
+          {toFiles.length > 0 ? (
+            <Box flexDirection="column">
+              <Text dimColor>To:</Text>
+              {toFiles.map((file) => (
+                <Text key={file} color="cyan">  {file}</Text>
+              ))}
+            </Box>
+          ) : null}
+          <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="green" paddingX={1}>
+            <Text bold color="green">Will restore</Text>
+            {restoreEntries.length === 0 ? (
+              <Text dimColor>none</Text>
+            ) : (
+              restoreEntries.map(([key, value]) => (
+                <Box key={key}>
+                  <Text color="yellow">• </Text>
+                  <Text color="magenta">{key}</Text>
+                  <Text dimColor>=</Text>
+                  <Text color="white">{value}</Text>
+                </Box>
+              ))
+            )}
+          </Box>
+        </Box>
       ) : null}
       {currentState.step === 'confirm' && selectedRecord?.action !== 'init' ? (
-        <>
+        <Box flexDirection="column" marginTop={1}>
           <Text>
-            Confirm restore from {selectedRecord?.timestamp ?? 'record'} to{' '}
-            {currentState.targetType === 'preset'
-              ? `preset ${currentState.targetName}`
-              : currentState.targetType ?? 'settings'}
+            Confirm restore from <Text color="cyan">{selectedRecord?.timestamp ?? 'record'}</Text> to{' '}
+            <Text color="green">
+              {currentState.targetType === 'preset'
+                ? `preset ${currentState.targetName}`
+                : currentState.targetType ?? 'settings'}
+            </Text>
           </Text>
-          <Text>Will restore:</Text>
-          <Text>{restorePreview || 'none'}</Text>
-        </>
+          <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="green" paddingX={1}>
+            <Text bold color="green">Will restore</Text>
+            {restoreEntries.length === 0 ? (
+              <Text dimColor>none</Text>
+            ) : (
+              restoreEntries.map(([key, value]) => (
+                <Box key={key}>
+                  <Text color="yellow">• </Text>
+                  <Text color="magenta">{key}</Text>
+                  <Text dimColor>=</Text>
+                  <Text color="white">{value}</Text>
+                </Box>
+              ))
+            )}
+          </Box>
+        </Box>
       ) : null}
-      {currentState.step === 'done' ? <Text>Restore complete</Text> : null}
-      <Text>Press Enter to confirm or q to cancel</Text>
+      {currentState.step === 'done' ? (
+        <Text color="green">{'\n'}Restore complete</Text>
+      ) : null}
+      {currentState.step !== 'done' ? (
+        <Text>Press Enter to confirm or q to cancel</Text>
+      ) : null}
     </Box>
   )
 }
