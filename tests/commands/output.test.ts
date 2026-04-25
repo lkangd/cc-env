@@ -5,7 +5,7 @@ import { createDeletePresetCommand } from '../../src/commands/preset/delete.js'
 import { createEditPresetCommand } from '../../src/commands/preset/edit.js'
 import { createShowPresetCommand } from '../../src/commands/preset/show.js'
 import { CliError } from '../../src/core/errors.js'
-import { formatEnvBlock } from '../../src/core/format.js'
+import { formatEnvBlock, formatRestorePreview } from '../../src/core/format.js'
 
 const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -21,6 +21,17 @@ describe('formatEnvBlock', () => {
         BASE_URL: 'https://api.openai.com',
       }),
     ).toBe('BASE_URL=https://api.openai.com\nOPENAI_API_KEY=sk-123456********')
+  })
+})
+
+describe('formatRestorePreview', () => {
+  it('shows restore values as newline-delimited key=value entries without masking', () => {
+    expect(
+      formatRestorePreview({
+        OPENAI_API_KEY: 'sk-123',
+        BASE_URL: 'https://api.openai.com',
+      }),
+    ).toBe('BASE_URL=https://api.openai.com\nOPENAI_API_KEY=sk-123')
   })
 })
 

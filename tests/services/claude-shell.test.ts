@@ -47,6 +47,47 @@ describe('Claude settings env service', () => {
       },
     })
   })
+
+  it('preserves sibling fields when writing updated env values', async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'cc-env-home-'))
+    roots.push(homeDir)
+
+    await mkdir(join(homeDir, '.claude'), { recursive: true })
+    await writeFile(
+      join(homeDir, '.claude', 'settings.json'),
+      `${JSON.stringify({
+        theme: 'dark',
+        env: {
+          ANTHROPIC_BASE_URL: 'https://settings.example.com',
+        },
+      }, null, 2)}\n`,
+      'utf8',
+    )
+    await writeFile(
+      join(homeDir, '.claude', 'settings.local.json'),
+      `${JSON.stringify({
+        permissions: { allow: ['Bash'] },
+        env: {
+          ANTHROPIC_AUTH_TOKEN: 'local-token',
+        },
+      }, null, 2)}\n`,
+      'utf8',
+    )
+
+    const service = createClaudeSettingsEnvService({ homeDir })
+
+    await service.write({
+      settingsEnv: {},
+      settingsLocalEnv: {},
+    })
+
+    await expect(readFile(join(homeDir, '.claude', 'settings.json'), 'utf8')).resolves.toContain(
+      '"theme": "dark"',
+    )
+    await expect(readFile(join(homeDir, '.claude', 'settings.local.json'), 'utf8')).resolves.toContain(
+      '"permissions"',
+    )
+  })
 })
 
 describe('shell env service', () => {

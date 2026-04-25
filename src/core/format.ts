@@ -15,3 +15,10 @@ export function formatPresetTable(names: string[]): string {
 
   return names.join('\n')
 }
+
+export function formatRestorePreview(env: EnvMap): string {
+  return Object.entries(env)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n')
+}

@@ -42,6 +42,7 @@ export function createRestoreCommand({
   settingsEnvService,
   presetService,
   renderFlow,
+  stdout = process.stdout,
 }: {
   historyService: HistoryService
   claudeSettingsEnvService: ClaudeSettingsEnvService
@@ -52,6 +53,7 @@ export function createRestoreCommand({
     records: HistoryRecord[]
     yes: boolean
   }) => Promise<RestoreFlowResult | void> | RestoreFlowResult | void
+  stdout?: Pick<NodeJS.WriteStream, 'write'>
 }) {
   return async function restore({ yes = false }: { yes?: boolean } = {}): Promise<void> {
     const records = await historyService.list()
@@ -80,6 +82,7 @@ export function createRestoreCommand({
           ...record.settingsLocalBackup,
         },
       })
+      stdout.write('Restore complete\n')
       return
     }
 
@@ -89,6 +92,7 @@ export function createRestoreCommand({
         ...currentSettings,
         ...record.backup,
       })
+      stdout.write('Restore complete\n')
       return
     }
 
@@ -103,5 +107,6 @@ export function createRestoreCommand({
         ...record.backup,
       },
     })
+    stdout.write('Restore complete\n')
   }
 }

@@ -116,6 +116,19 @@ describe('restore flow', () => {
     })
   })
 
+  it('finishes an init restore after confirm', () => {
+    const confirmState = advanceRestoreFlow(createRestoreFlowState([initRecord]), {
+      type: 'select-record',
+      timestamp: initRecord.timestamp,
+    })
+
+    expect(advanceRestoreFlow(confirmState, { type: 'confirm' })).toEqual({
+      step: 'done',
+      records: [initRecord],
+      selectedTimestamp: initRecord.timestamp,
+    })
+  })
+
   it('keeps the done step unchanged for any later action', () => {
     const doneState = advanceRestoreFlow(createConfirmState(), { type: 'confirm' })
 

@@ -53,15 +53,61 @@ const runtimeEnvService = createRuntimeEnvService()
 const presetService = createPresetService(globalRoot)
 const historyService = createHistoryService(globalRoot)
 
-function runRestoreFlow(context: {
+async function runRestoreFlow(context: {
   records: Awaited<ReturnType<typeof historyService.list>>
   yes: boolean
 }) {
   const state = createRestoreFlowState(context.records)
   const firstRecord = context.records[0]
 
-  if (!context.yes || !firstRecord) {
+  if (!firstRecord) {
     render(h(RestoreApp, { state }))
+    return undefined
+  }
+
+  if (context.yes) {
+    const selectedRecordState = advanceRestoreFlow(state, {
+      type: 'select-record',
+      timestamp: firstRecord.timestamp,
+    })
+
+    if (firstRecord.action === 'init') {
+      const doneState = advanceRestoreFlow(selectedRecordState, { type: 'confirm' })
+      if (doneState.step !== 'done') {
+        return undefined
+      }
+
+      return {
+        confirmed: true,
+        timestamp: firstRecord.timestamp,
+      }
+    }
+
+    const confirmState = advanceRestoreFlow(selectedRecordState, {
+      type: 'select-target',
+      targetType: firstRecord.targetType,
+      ...(firstRecord.targetType === 'preset' ? { targetName: firstRecord.targetName } : {}),
+    })
+
+    const doneState = advanceRestoreFlow(confirmState, { type: 'confirm' })
+
+    if (doneState.step === 'done' && doneState.targetType === 'preset') {
+      return {
+        confirmed: true,
+        timestamp: doneState.selectedTimestamp,
+        targetType: doneState.targetType,
+        targetName: doneState.targetName,
+      }
+    }
+
+    if (doneState.step === 'done') {
+      return {
+        confirmed: true,
+        timestamp: doneState.selectedTimestamp,
+        targetType: doneState.targetType,
+      }
+    }
+
     return undefined
   }
 
@@ -69,53 +115,35 @@ function runRestoreFlow(context: {
     type: 'select-record',
     timestamp: firstRecord.timestamp,
   })
+  const interactiveState =
+    firstRecord.action === 'init'
+      ? selectedRecordState
+      : advanceRestoreFlow(selectedRecordState, {
+          type: 'select-target',
+          targetType: firstRecord.targetType,
+          ...(firstRecord.targetType === 'preset' ? { targetName: firstRecord.targetName } : {}),
+        })
 
-  if (firstRecord.action === 'init') {
-    render(h(RestoreApp, { state: selectedRecordState }))
+  let result:
+    | {
+        confirmed: boolean
+        timestamp?: string
+        targetType?: 'settings' | 'preset'
+        targetName?: string
+      }
+    | undefined
 
-    const doneState = advanceRestoreFlow(selectedRecordState, { type: 'confirm' })
-    if (doneState.step !== 'done') {
-      return undefined
-    }
+  const app = render(
+    h(RestoreApp, {
+      state: interactiveState,
+      onSubmit: (value) => {
+        result = value
+      },
+    }),
+  )
 
-    return {
-      confirmed: true,
-      timestamp: firstRecord.timestamp,
-    }
-  }
-
-  const confirmState = advanceRestoreFlow(selectedRecordState, {
-    type: 'select-target',
-    targetType: firstRecord.targetType,
-    ...(firstRecord.targetType === 'preset' ? { targetName: firstRecord.targetName } : {}),
-  })
-
-  render(h(RestoreApp, { state: confirmState }))
-
-  if (confirmState.step !== 'confirm') {
-    return undefined
-  }
-
-  const doneState = advanceRestoreFlow(confirmState, { type: 'confirm' })
-
-  if (doneState.step === 'done' && doneState.targetType === 'preset') {
-    return {
-      confirmed: true,
-      timestamp: doneState.selectedTimestamp,
-      targetType: doneState.targetType,
-      targetName: doneState.targetName,
-    }
-  }
-
-  if (doneState.step === 'done') {
-    return {
-      confirmed: true,
-      timestamp: doneState.selectedTimestamp,
-      targetType: doneState.targetType,
-    }
-  }
-
-  return undefined
+  await app.waitUntilExit()
+  return result
 }
 
 program.exitOverride()
@@ -151,14 +179,31 @@ program.command('init')
       shellEnvService,
       historyService,
       renderFlow: async (context) => {
-        render(h(InitApp, context))
         if (context.yes) {
           return {
             selectedKeys: context.requiredKeys,
             confirmed: true,
           }
         }
-        return undefined
+
+        let result:
+          | {
+              selectedKeys: string[]
+              confirmed: boolean
+            }
+          | undefined
+
+        const app = render(
+          h(InitApp, {
+            ...context,
+            onSubmit: (value) => {
+              result = value
+            },
+          }),
+        )
+
+        await app.waitUntilExit()
+        return result
       },
     })({
       yes: options.yes,

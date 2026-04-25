@@ -110,7 +110,22 @@ export function advanceRestoreFlow(
       }
 
     case 'confirm':
-      if (action.type !== 'confirm' || !state.selectedTimestamp || !state.targetType) {
+      if (action.type !== 'confirm' || !state.selectedTimestamp) {
+        return state
+      }
+
+      const selectedRecord = state.records.find(
+        (record) => record.timestamp === state.selectedTimestamp,
+      )
+
+      if (selectedRecord?.action === 'init') {
+        return {
+          ...state,
+          step: 'done',
+        } as RestoreFlowState
+      }
+
+      if (!state.targetType) {
         return state
       }
 

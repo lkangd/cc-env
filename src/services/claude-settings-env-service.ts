@@ -39,6 +39,22 @@ export function createClaudeSettingsEnvService({ homeDir }: { homeDir?: string }
     }
   }
 
+  async function writeOne(path: string, env: EnvMap): Promise<void> {
+    let json: Record<string, unknown> = {}
+
+    try {
+      const content = await readFile(path, 'utf8')
+      json = JSON.parse(content) as Record<string, unknown>
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error
+      }
+    }
+
+    json.env = envMapSchema.parse(env)
+    await atomicWriteFile(path, `${JSON.stringify(json, null, 2)}\n`)
+  }
+
   return {
     read: async () => ({
       settings: await readOne(settingsPath),
@@ -51,14 +67,8 @@ export function createClaudeSettingsEnvService({ homeDir }: { homeDir?: string }
       settingsEnv: EnvMap
       settingsLocalEnv: EnvMap
     }) => {
-      await atomicWriteFile(
-        settingsPath,
-        `${JSON.stringify({ env: envMapSchema.parse(settingsEnv) }, null, 2)}\n`,
-      )
-      await atomicWriteFile(
-        settingsLocalPath,
-        `${JSON.stringify({ env: envMapSchema.parse(settingsLocalEnv) }, null, 2)}\n`,
-      )
+      await writeOne(settingsPath, settingsEnv)
+      await writeOne(settingsLocalPath, settingsLocalEnv)
     },
   }
 }
