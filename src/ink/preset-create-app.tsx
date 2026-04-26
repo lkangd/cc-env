@@ -35,7 +35,7 @@ function SourceStep({ cursor }: { cursor: number }) {
         {options.map((opt, i) => (
           <Box key={opt.value}>
             <Text>{i === cursor ? '❯ ' : '  '}</Text>
-            <Text color={i === cursor ? 'cyan' : undefined}>{opt.label}</Text>
+            <Text {...(i === cursor ? { color: 'cyan' } : {})}>{opt.label}</Text>
           </Box>
         ))}
       </Box>
@@ -149,7 +149,7 @@ function DestinationStep({ cursor }: { cursor: number }) {
         {options.map((opt, i) => (
           <Box key={opt.value}>
             <Text>{i === cursor ? '❯ ' : '  '}</Text>
-            <Text color={i === cursor ? 'cyan' : undefined}>{opt.label}</Text>
+            <Text {...(i === cursor ? { color: 'cyan' } : {})}>{opt.label}</Text>
           </Box>
         ))}
       </Box>
@@ -384,7 +384,7 @@ export function PresetCreateApp({
         setState(doneState)
         void Promise.resolve(
           onSubmit({
-            source: state.source,
+            source: state.source!,
             filePath: state.filePath,
             env: state.env,
             selectedKeys: state.selectedKeys,
@@ -410,7 +410,7 @@ export function PresetCreateApp({
     <Box flexDirection="column">
       {state.step === 'source' && <SourceStep cursor={listCursor} />}
       {state.step === 'filePath' && (
-        <FilePathStep value={textInput} error={state.error} />
+        <FilePathStep value={textInput} {...(state.error ? { error: state.error } : {})} />
       )}
       {state.step === 'keys' && (
         <KeysStep keys={allKeys} selectedKeys={state.selectedKeys} cursor={listCursor} />
@@ -419,7 +419,7 @@ export function PresetCreateApp({
         <ManualInputStep
           entries={state.selectedKeys.map((k) => [k, state.env[k] ?? ''] as [string, string])}
           value={textInput}
-          error={state.error}
+          {...(state.error ? { error: state.error } : {})}
         />
       )}
       {state.step === 'name' && <NameStep value={textInput} />}
@@ -434,7 +434,7 @@ export function PresetCreateApp({
                 .sort(([a], [b]) => a.localeCompare(b)) as [string, string][]
             }
             mask
-            fromFiles={state.filePath ? [state.filePath] : undefined}
+            {...(state.filePath ? { fromFiles: [state.filePath] } : {})}
             toFiles={[
               state.destination === 'global'
                 ? globalPresetPath(state.presetName)

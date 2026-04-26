@@ -22,13 +22,15 @@ export type PresetCreateFlowState = {
   selectedKeys: string[]
   presetName: string
   destination?: PresetCreateDestination
-  error?: string
+  error?: string | undefined
 }
 
 export type PresetCreateFlowResult = Pick<
   PresetCreateFlowState,
-  'source' | 'filePath' | 'env' | 'selectedKeys' | 'presetName' | 'destination'
->
+  'source' | 'env' | 'selectedKeys' | 'presetName' | 'destination'
+> & {
+  filePath?: string | undefined
+}
 
 export type PresetCreateFlowAction =
   | { type: 'select-source'; source: PresetCreateSource }

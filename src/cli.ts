@@ -232,15 +232,12 @@ presetCommand.command('delete <name>').action(
 presetCommand.command('edit <name>').action(
   createEditPresetCommand({ presetService }),
 )
-presetCommand.command('create [pairs...]')
-  .option('-n, --name <name>')
-  .option('-f, --file <path>')
-  .option('--project')
-  .action((pairs, options) =>
+presetCommand.command('create')
+  .action(() =>
     createPresetCreateCommand({
       presetService,
       projectEnvService,
-      renderFlow: async (context) => {
+      renderFlow: async () => {
         let result: React.ComponentProps<typeof PresetCreateApp>['onSubmit'] extends (
           result: infer TResult,
         ) => unknown
@@ -251,18 +248,19 @@ presetCommand.command('create [pairs...]')
             onSubmit: (value) => {
               result = value
             },
+            readFile: async (filePath) => {
+              const { readEnvFile } = await import('./commands/preset/create.js')
+              return readEnvFile(filePath)
+            },
+            globalPresetPath: (name) => presetService.getPath(name),
+            projectEnvPath: join(cwd, '.cc-env', 'env.json'),
           }),
         )
 
         await app.waitUntilExit()
         return result
       },
-    })({
-      name: options.name,
-      file: options.file,
-      pairs,
-      project: options.project,
-    }),
+    })(),
   )
 
 function printBanner() {
