@@ -6,16 +6,16 @@ import { EnvEntries } from './summary.js'
 
 export type PresetSource = 'global' | 'project'
 
-export type PresetListItem = {
+export type PresetShowItem = {
   name: string
   env: EnvMap
   source: PresetSource
 }
 
-export function PresetListApp({
+export function PresetShowApp({
   presets,
 }: {
-  presets: Array<PresetListItem>
+  presets: Array<PresetShowItem>
 }) {
   const { exit } = useApp()
   const [cursor, setCursor] = useState(0)
@@ -48,7 +48,7 @@ export function PresetListApp({
 
   return (
     <Box flexDirection="column">
-      <Text>Preset list</Text>
+      <Text>Preset show</Text>
       <Text dimColor>↑/k ↓/j navigate · q exit</Text>
       <Box marginTop={1}>
         <Box flexDirection="column" width={28} marginRight={2}>

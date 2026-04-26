@@ -79,8 +79,7 @@ describe('cc-env CLI help', () => {
       cwd: repoRoot,
     })
 
-    expect(stdout).toContain('list')
-    expect(stdout).toContain('show <name>')
+    expect(stdout).toContain('show')
     expect(stdout).toContain('delete <name>')
     expect(stdout).toContain('edit <name>')
   })

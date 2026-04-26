@@ -4,7 +4,6 @@ import { renderEnvSummary } from '../../src/ink/summary.js'
 import { createDebugCommand } from '../../src/commands/debug.js'
 import { createDeletePresetCommand } from '../../src/commands/preset/delete.js'
 import { createEditPresetCommand } from '../../src/commands/preset/edit.js'
-import { createShowPresetCommand } from '../../src/commands/preset/show.js'
 import { CliError } from '../../src/core/errors.js'
 import { formatEnvBlock, formatRestorePreview } from '../../src/core/format.js'
 
@@ -37,31 +36,6 @@ describe('formatRestorePreview', () => {
         BASE_URL: 'https://api.openai.com',
       }),
     ).toBe('BASE_URL=https://api.openai.com\nOPENAI_API_KEY=sk-123')
-  })
-})
-
-describe('createShowPresetCommand', () => {
-  it('prints a preset with masked secrets', async () => {
-    const showPreset = createShowPresetCommand({
-      presetService: {
-        read: vi.fn().mockResolvedValue({
-          name: 'openai',
-          filePath: '/tmp/openai.json',
-          createdAt: '2026-04-24T00:00:00.000Z',
-          updatedAt: '2026-04-24T00:00:00.000Z',
-          env: {
-            OPENAI_API_KEY: 'sk-1234567890',
-            BASE_URL: 'https://api.openai.com',
-          },
-        }),
-      },
-    })
-
-    await showPreset('openai')
-
-    expect(logSpy).toHaveBeenCalledWith(
-      ['Preset: openai', 'BASE_URL=https://api.openai.com', 'OPENAI_API_KEY=sk-123456********'].join('\n'),
-    )
   })
 })
 
