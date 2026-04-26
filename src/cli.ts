@@ -40,7 +40,7 @@ import { createShellEnvService } from './services/shell-env-service.js'
 
 const program = new Command()
 
-program.name('cc-env')
+program.name('cc-env').description('Manage runtime environment variables for Claude Code')
 
 const homeDir = process.env.HOME ?? process.cwd()
 const cwd = process.cwd()
@@ -136,11 +136,18 @@ async function runRestoreFlow(context: {
   return result
 }
 
-program.exitOverride()
+program.exitOverride().configureOutput({
+  writeErr: (str) => {
+    if (!str.startsWith('error:')) {
+      process.stderr.write(str)
+    }
+  },
+})
 
 program.command('run [command] [args...]')
-  .option('-p, --preset <name>')
-  .option('--dry-run')
+  .description('Run a command with merged environment variables')
+  .option('-p, --preset <name>', 'Apply a saved preset by name')
+  .option('--dry-run', 'Preview the merged env without executing')
   .action((command, args, options) =>
     createRunCommand({
       configService,
@@ -162,7 +169,8 @@ program.command('run [command] [args...]')
   )
 
 program.command('init')
-  .option('-y, --yes')
+  .description('Initialize cc-env for the current project')
+  .option('-y, --yes', 'Accept all defaults without interactive prompts')
   .action((options) =>
     createInitCommand({
       claudeSettingsEnvService,
@@ -203,7 +211,8 @@ program.command('init')
   )
 
 program.command('restore')
-  .option('-y, --yes')
+  .description('Restore environment variables from a previous snapshot')
+  .option('-y, --yes', 'Accept all defaults without interactive prompts')
   .action((options) =>
     createRestoreCommand({
       historyService,
@@ -219,8 +228,8 @@ program.command('restore')
     }),
   )
 
-const presetCommand = program.command('preset')
-presetCommand.command('show').action(
+const presetCommand = program.command('preset').description('Manage environment presets')
+presetCommand.command('show').description('List and view all presets').action(
   createShowPresetsCommand({
     presetService,
     projectEnvService,
@@ -230,7 +239,7 @@ presetCommand.command('show').action(
     },
   }),
 )
-presetCommand.command('delete').action(
+presetCommand.command('delete').description('Delete a saved preset').action(
   createDeletePresetCommand({
     presetService,
     projectEnvService,
@@ -249,7 +258,7 @@ presetCommand.command('delete').action(
     },
   }),
 )
-presetCommand.command('create')
+presetCommand.command('create').description('Create a new environment preset')
   .action(() =>
     createPresetCreateCommand({
       presetService,
@@ -291,7 +300,7 @@ program.hook('preAction', () => {
   printBanner()
 })
 
-program.command('debug').action(
+program.command('debug').description('Show current environment debug info').action(
   createDebugCommand({
     processEnv: process.env,
     settingsEnvService,
@@ -302,7 +311,7 @@ program.command('debug').action(
 
 program.parseAsync(process.argv).catch((error: unknown) => {
   if (error instanceof CliError) {
-    process.stderr.write(`${error.message}\n`)
+    process.stderr.write(`\n  Error: ${error.message}\n\n`)
     process.exitCode = error.exitCode
     return
   }
@@ -310,10 +319,19 @@ program.parseAsync(process.argv).catch((error: unknown) => {
   if (
     error &&
     typeof error === 'object' &&
-    'code' in error &&
-    (error as { code?: string }).code === 'commander.helpDisplayed'
+    'code' in error
   ) {
-    process.exitCode = 0
+    const { code, message } = error as { code?: string; message?: string }
+
+    if (code === 'commander.helpDisplayed') {
+      process.exitCode = 0
+      return
+    }
+
+    const hint = `  Run "cc-env --help" to see available commands and options.\n`
+    const formatted = message?.replace(/^error:\s*/i, '') ?? 'Unknown error'
+    process.stderr.write(`\n  Error: ${formatted}\n\n${hint}\n`)
+    process.exitCode = 1
     return
   }
 
