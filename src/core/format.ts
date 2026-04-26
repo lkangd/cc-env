@@ -8,14 +8,6 @@ export function formatEnvBlock(env: EnvMap): string {
     .join('\n')
 }
 
-export function formatPresetTable(names: string[]): string {
-  if (names.length === 0) {
-    return 'No presets found.'
-  }
-
-  return names.join('\n')
-}
-
 export function formatRestorePreview(env: EnvMap): string {
   return Object.entries(env)
     .sort(([left], [right]) => left.localeCompare(right))

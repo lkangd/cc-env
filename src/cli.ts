@@ -20,6 +20,7 @@ import { createRunCommand } from './commands/run.js'
 import { InitApp } from './ink/init-app.js'
 import { renderEnvSummary } from './ink/summary.js'
 import { PresetCreateApp } from './ink/preset-create-app.js'
+import { PresetListApp } from './ink/preset-list-app.js'
 import {
   advanceRestoreFlow,
   createRestoreFlowState,
@@ -221,7 +222,14 @@ program.command('restore')
 
 const presetCommand = program.command('preset')
 presetCommand.command('list').action(
-  createListPresetsCommand({ presetService }),
+  createListPresetsCommand({
+    presetService,
+    projectEnvService,
+    renderList: async (presets) => {
+      const app = render(h(PresetListApp, { presets }))
+      await app.waitUntilExit()
+    },
+  }),
 )
 presetCommand.command('show <name>').action(
   createShowPresetCommand({ presetService }),

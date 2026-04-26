@@ -143,7 +143,7 @@ describe('createPresetCreateCommand', () => {
 
     await createPreset()
 
-    expect(projectEnvService.write).toHaveBeenCalledWith({ API_KEY: 'secret' })
+    expect(projectEnvService.write).toHaveBeenCalledWith({ API_KEY: 'secret' }, { name: 'proj', createdAt: expect.any(String), updatedAt: expect.any(String) })
     expect(presetService.write).not.toHaveBeenCalled()
   })
 

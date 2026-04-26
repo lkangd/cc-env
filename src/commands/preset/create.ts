@@ -18,7 +18,7 @@ type PresetService = {
 }
 
 type ProjectEnvService = {
-  write: (env: EnvMap) => Promise<unknown>
+  write: (env: EnvMap, meta?: { name?: string; createdAt?: string; updatedAt?: string }) => Promise<unknown>
 }
 
 export async function readEnvFile(filePath: string): Promise<{ allKeys: string[]; env: EnvMap }> {
@@ -78,7 +78,7 @@ export function createPresetCreateCommand({
     const timestamp = new Date().toISOString()
 
     if (result.destination === 'project') {
-      await projectEnvService.write(selectedEnv)
+      await projectEnvService.write(selectedEnv, { name: result.presetName, createdAt: timestamp, updatedAt: timestamp })
       return
     }
 
