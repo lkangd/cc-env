@@ -144,10 +144,10 @@ program.command('run [command] [args...]')
       configService,
       presetService,
       envSources: async ({ preset: _preset, presetEnv }) => ({
-        settingsEnv: await settingsEnvService.read(),
         processEnv: toProcessEnvMap(process.env),
-        presetEnv,
+        settingsEnv: await settingsEnvService.read(),
         projectEnv: await projectEnvService.read(),
+        presetEnv,
       }),
       runtimeEnvService,
       spawnCommand,
@@ -265,10 +265,10 @@ presetCommand.command('create [pairs...]')
 
 program.command('debug').action(
   createDebugCommand({
+    processEnv: process.env,
     settingsEnvService,
     projectEnvService,
     runtimeEnvService,
-    processEnv: process.env,
   }),
 )
 

@@ -1,5 +1,5 @@
-import { formatEnvBlock } from '../core/format.js'
 import { toProcessEnvMap } from '../core/process-env.js'
+import { renderEnvSummary } from '../ink/summary.js'
 import type { EnvMap } from '../core/schema.js'
 
 type EnvReader = {
@@ -8,10 +8,10 @@ type EnvReader = {
 
 type RuntimeEnvService = {
   merge: (input: {
-    settingsEnv: EnvMap
     processEnv: EnvMap
-    presetEnv: EnvMap
+    settingsEnv: EnvMap
     projectEnv: EnvMap
+    presetEnv: EnvMap
   }) => EnvMap
 }
 
@@ -35,12 +35,16 @@ export function createDebugCommand({
     ])
 
     const mergedEnv = runtimeEnvService.merge({
-      settingsEnv,
       processEnv: toProcessEnvMap(processEnv),
-      presetEnv,
+      settingsEnv,
       projectEnv,
+      presetEnv,
     })
 
-    console.log(formatEnvBlock(mergedEnv))
+    await renderEnvSummary({
+      title: 'Merged Environment',
+      description: 'Final env after merging: process + settings + project + preset',
+      env: mergedEnv,
+    })
   }
 }

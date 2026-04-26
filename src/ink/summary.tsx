@@ -24,6 +24,7 @@ export function EnvEntries({ entries, mask }: { entries: [string, string][]; mas
 export function EnvSummary({
   title,
   entries,
+  description,
   fromFiles,
   toFiles,
   footer,
@@ -31,6 +32,7 @@ export function EnvSummary({
 }: {
   title: string
   entries: [string, string][]
+  description?: string
   fromFiles?: string[]
   toFiles?: string[]
   footer?: ReactNode
@@ -38,6 +40,7 @@ export function EnvSummary({
 }) {
   return (
     <Box flexDirection="column">
+      {description ? <Text dimColor>{description}</Text> : null}
       {fromFiles && fromFiles.length > 0 ? (
         <Box flexDirection="column">
           <Text dimColor>From:</Text>
@@ -65,6 +68,7 @@ export function EnvSummary({
 
 export async function renderEnvSummary(props: {
   title: string
+  description?: string
   env: EnvMap
   fromFiles?: string[]
   toFiles?: string[]
@@ -76,6 +80,7 @@ export async function renderEnvSummary(props: {
       title: props.title,
       entries,
       mask: true,
+      ...(props.description ? { description: props.description } : {}),
       ...(props.fromFiles ? { fromFiles: props.fromFiles } : {}),
       ...(props.toFiles ? { toFiles: props.toFiles } : {}),
       ...(props.footer ? { footer: props.footer } : {}),

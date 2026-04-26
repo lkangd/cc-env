@@ -24,10 +24,10 @@ type PresetService = {
 
 type RuntimeEnvService = {
   merge: (input: {
-    settingsEnv: EnvMap
     processEnv: EnvMap
-    presetEnv: EnvMap
+    settingsEnv: EnvMap
     projectEnv: EnvMap
+    presetEnv: EnvMap
   }) => EnvMap
 }
 
@@ -35,10 +35,10 @@ type EnvSources = (input: {
   preset: string
   presetEnv: EnvMap
 }) => Promise<{
-  settingsEnv: EnvMap
   processEnv: EnvMap
-  presetEnv: EnvMap
+  settingsEnv: EnvMap
   projectEnv: EnvMap
+  presetEnv: EnvMap
 }>
 
 type SpawnCommand = (
