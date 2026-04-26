@@ -48,7 +48,7 @@ const settingsPath = join(cwd, 'settings.json')
 const globalRoot = resolveGlobalRoot()
 
 const configService = createConfigService(globalRoot)
-const claudeSettingsEnvService = createClaudeSettingsEnvService({ homeDir })
+const claudeSettingsEnvService = createClaudeSettingsEnvService({ homeDir, cwd })
 const settingsEnvService = createSettingsEnvService({ settingsPath })
 const shellEnvService = createShellEnvService({ homeDir })
 const projectEnvService = createProjectEnvService({ cwd })
@@ -176,7 +176,6 @@ program.command('init')
       claudeSettingsEnvService,
       shellEnvService,
       historyService,
-      homeDir,
       renderEnvSummary,
       renderFlow: async (context) => {
         if (context.yes) {
@@ -220,7 +219,6 @@ program.command('restore')
       shellEnvService,
       settingsEnvService,
       presetService,
-      homeDir,
       renderEnvSummary: renderEnvSummary,
       renderFlow: (context) => runRestoreFlow(context),
     })({

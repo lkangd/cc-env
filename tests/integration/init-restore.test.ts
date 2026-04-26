@@ -3,24 +3,22 @@ import { describe, expect, it, vi } from 'vitest'
 import { createInitCommand } from '../../src/commands/init.js'
 import { createRestoreCommand } from '../../src/commands/restore.js'
 
+const globalSettingsPath = '/Users/test/.claude/settings.json'
+const globalSettingsLocalPath = '/Users/test/.claude/settings.local.json'
+const projectSettingsPath = '/project/.claude/settings.json'
+const projectSettingsLocalPath = '/project/.claude/settings.local.json'
+
+const allPaths = [globalSettingsPath, globalSettingsLocalPath, projectSettingsPath, projectSettingsLocalPath]
+
 describe('createInitCommand', () => {
   it('migrates effective env from Claude settings into shell blocks and records per-file backups', async () => {
     const claudeSettingsEnvService = {
-      read: vi.fn().mockResolvedValue({
-        settings: {
-          exists: true,
-          env: {
-            ANTHROPIC_BASE_URL: 'https://settings.example.com',
-          },
-        },
-        settingsLocal: {
-          exists: true,
-          env: {
-            ANTHROPIC_AUTH_TOKEN: 'local-token',
-            ANTHROPIC_BASE_URL: 'https://local.example.com',
-          },
-        },
-      }),
+      read: vi.fn().mockResolvedValue([
+        { path: globalSettingsPath, exists: true, env: { ANTHROPIC_BASE_URL: 'https://settings.example.com' } },
+        { path: globalSettingsLocalPath, exists: true, env: { ANTHROPIC_AUTH_TOKEN: 'local-token', ANTHROPIC_BASE_URL: 'https://local.example.com' } },
+        { path: projectSettingsPath, exists: false, env: {} },
+        { path: projectSettingsLocalPath, exists: false, env: {} },
+      ]),
       write: vi.fn().mockResolvedValue(undefined),
     }
     const shellEnvService = {
@@ -47,7 +45,6 @@ describe('createInitCommand', () => {
       claudeSettingsEnvService,
       shellEnvService,
       historyService,
-      homeDir: '/Users/test',
       renderFlow,
       renderEnvSummary: vi.fn().mockResolvedValue(undefined),
     })
@@ -57,7 +54,7 @@ describe('createInitCommand', () => {
     expect(renderFlow).toHaveBeenCalledWith({
       keys: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
       requiredKeys: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
-      sourceFiles: ['/Users/test/.claude/settings.json', '/Users/test/.claude/settings.local.json'],
+      sourceFiles: allPaths,
       yes: false,
     })
     expect(shellEnvService.write).toHaveBeenCalledWith({
@@ -70,17 +67,25 @@ describe('createInitCommand', () => {
       migratedKeys: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
       sources: [
         {
-          file: '/Users/test/.claude/settings.json',
+          file: globalSettingsPath,
           backup: {
             ANTHROPIC_BASE_URL: 'https://settings.example.com',
           },
         },
         {
-          file: '/Users/test/.claude/settings.local.json',
+          file: globalSettingsLocalPath,
           backup: {
             ANTHROPIC_AUTH_TOKEN: 'local-token',
             ANTHROPIC_BASE_URL: 'https://local.example.com',
           },
+        },
+        {
+          file: projectSettingsPath,
+          backup: {},
+        },
+        {
+          file: projectSettingsLocalPath,
+          backup: {},
         },
       ],
       shellWrites: [
@@ -94,30 +99,33 @@ describe('createInitCommand', () => {
         },
       ],
     })
-    expect(claudeSettingsEnvService.write).toHaveBeenCalledWith({
-      settingsEnv: {},
-      settingsLocalEnv: {},
-    })
+    expect(claudeSettingsEnvService.write).toHaveBeenCalledWith([
+      { path: globalSettingsPath, env: {} },
+      { path: globalSettingsLocalPath, env: {} },
+      { path: projectSettingsPath, env: {} },
+      { path: projectSettingsLocalPath, env: {} },
+    ])
   })
 
-  it('fails when both Claude settings files are missing', async () => {
+  it('fails when all Claude settings files are missing', async () => {
     const init = createInitCommand({
       claudeSettingsEnvService: {
-        read: vi.fn().mockResolvedValue({
-          settings: { exists: false, env: {} },
-          settingsLocal: { exists: false, env: {} },
-        }),
+        read: vi.fn().mockResolvedValue([
+          { path: globalSettingsPath, exists: false, env: {} },
+          { path: globalSettingsLocalPath, exists: false, env: {} },
+          { path: projectSettingsPath, exists: false, env: {} },
+          { path: projectSettingsLocalPath, exists: false, env: {} },
+        ]),
         write: vi.fn(),
       },
       shellEnvService: { write: vi.fn() },
       historyService: { write: vi.fn() },
-      homeDir: '/Users/test',
       renderFlow: vi.fn(),
       renderEnvSummary: vi.fn().mockResolvedValue(undefined),
     })
 
     await expect(init({ yes: false })).rejects.toMatchObject({
-      message: 'Claude settings.json and settings.local.json were not found',
+      message: 'No Claude settings files were found',
       exitCode: 1,
     })
   })
@@ -133,11 +141,11 @@ describe('createRestoreCommand', () => {
           migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
           sources: [
             {
-              file: '/Users/test/.claude/settings.json',
+              file: globalSettingsPath,
               backup: {},
             },
             {
-              file: '/Users/test/.claude/settings.local.json',
+              file: globalSettingsLocalPath,
               backup: {
                 ANTHROPIC_AUTH_TOKEN: 'local-token',
               },
@@ -156,10 +164,12 @@ describe('createRestoreCommand', () => {
       ]),
     }
     const claudeSettingsEnvService = {
-      read: vi.fn().mockResolvedValue({
-        settings: { exists: true, env: {} },
-        settingsLocal: { exists: true, env: {} },
-      }),
+      read: vi.fn().mockResolvedValue([
+        { path: globalSettingsPath, exists: true, env: {} },
+        { path: globalSettingsLocalPath, exists: true, env: {} },
+        { path: projectSettingsPath, exists: false, env: {} },
+        { path: projectSettingsLocalPath, exists: false, env: {} },
+      ]),
       write: vi.fn().mockResolvedValue(undefined),
     }
     const shellEnvService = {
@@ -183,7 +193,6 @@ describe('createRestoreCommand', () => {
         write: vi.fn(),
       },
       presetService,
-      homeDir: '/Users/test',
       renderEnvSummary: vi.fn().mockResolvedValue(undefined),
       renderFlow,
     })
@@ -202,12 +211,12 @@ describe('createRestoreCommand', () => {
       ],
       ['ANTHROPIC_AUTH_TOKEN'],
     )
-    expect(claudeSettingsEnvService.write).toHaveBeenCalledWith({
-      settingsEnv: {},
-      settingsLocalEnv: {
-        ANTHROPIC_AUTH_TOKEN: 'local-token',
-      },
-    })
+    expect(claudeSettingsEnvService.write).toHaveBeenCalledWith([
+      { path: globalSettingsPath, env: {} },
+      { path: globalSettingsLocalPath, env: { ANTHROPIC_AUTH_TOKEN: 'local-token' } },
+      { path: projectSettingsPath, env: {} },
+      { path: projectSettingsLocalPath, env: {} },
+    ])
     expect(presetService.read).not.toHaveBeenCalled()
     expect(presetService.write).not.toHaveBeenCalled()
   })
@@ -221,11 +230,11 @@ describe('createRestoreCommand', () => {
           migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
           sources: [
             {
-              file: '/Users/test/.claude/settings.json',
+              file: globalSettingsPath,
               backup: {},
             },
             {
-              file: '/Users/test/.claude/settings.local.json',
+              file: globalSettingsLocalPath,
               backup: {
                 ANTHROPIC_AUTH_TOKEN: 'old-local-token',
               },
@@ -247,11 +256,11 @@ describe('createRestoreCommand', () => {
           migratedKeys: ['ANTHROPIC_AUTH_TOKEN', 'API_TIMEOUT_MS'],
           sources: [
             {
-              file: '/Users/test/.claude/settings.json',
+              file: globalSettingsPath,
               backup: {},
             },
             {
-              file: '/Users/test/.claude/settings.local.json',
+              file: globalSettingsLocalPath,
               backup: {
                 ANTHROPIC_AUTH_TOKEN: 'local-token',
                 API_TIMEOUT_MS: '3000000',
@@ -272,10 +281,12 @@ describe('createRestoreCommand', () => {
       ]),
     }
     const claudeSettingsEnvService = {
-      read: vi.fn().mockResolvedValue({
-        settings: { exists: true, env: {} },
-        settingsLocal: { exists: true, env: {} },
-      }),
+      read: vi.fn().mockResolvedValue([
+        { path: globalSettingsPath, exists: true, env: {} },
+        { path: globalSettingsLocalPath, exists: true, env: {} },
+        { path: projectSettingsPath, exists: false, env: {} },
+        { path: projectSettingsLocalPath, exists: false, env: {} },
+      ]),
       write: vi.fn().mockResolvedValue(undefined),
     }
     const shellEnvService = {
@@ -299,7 +310,6 @@ describe('createRestoreCommand', () => {
         write: vi.fn(),
       },
       presetService,
-      homeDir: '/Users/test',
       renderEnvSummary: vi.fn().mockResolvedValue(undefined),
       renderFlow,
     })
@@ -319,13 +329,12 @@ describe('createRestoreCommand', () => {
       ],
       ['ANTHROPIC_AUTH_TOKEN', 'API_TIMEOUT_MS'],
     )
-    expect(claudeSettingsEnvService.write).toHaveBeenCalledWith({
-      settingsEnv: {},
-      settingsLocalEnv: {
-        ANTHROPIC_AUTH_TOKEN: 'local-token',
-        API_TIMEOUT_MS: '3000000',
-      },
-    })
+    expect(claudeSettingsEnvService.write).toHaveBeenCalledWith([
+      { path: globalSettingsPath, env: {} },
+      { path: globalSettingsLocalPath, env: { ANTHROPIC_AUTH_TOKEN: 'local-token', API_TIMEOUT_MS: '3000000' } },
+      { path: projectSettingsPath, env: {} },
+      { path: projectSettingsLocalPath, env: {} },
+    ])
   })
 
   it('restores a non-init history record into a preset', async () => {
@@ -375,7 +384,6 @@ describe('createRestoreCommand', () => {
       },
       settingsEnvService,
       presetService,
-      homeDir: '/Users/test',
       renderEnvSummary: vi.fn().mockResolvedValue(undefined),
       renderFlow,
     })

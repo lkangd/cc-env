@@ -2,8 +2,8 @@ import React from 'react'
 import { Box, Text } from 'ink'
 
 import { CliError } from '../core/errors.js'
-import { resolveClaudeSettingsLocalPath, resolveClaudeSettingsPath } from '../core/paths.js'
 import { envMapSchema, type EnvMap, type InitHistoryRecord, type SourceEntry } from '../core/schema.js'
+import type { ClaudeSettingsSource } from '../services/claude-settings-env-service.js'
 import type { ShellWriteRecord } from '../services/shell-env-service.js'
 
 const h = React.createElement
@@ -18,11 +18,8 @@ const requiredInitKeys = [
 ] as const
 
 type ClaudeSettingsEnvService = {
-  read: () => Promise<{
-    settings: { exists: boolean; env: EnvMap }
-    settingsLocal: { exists: boolean; env: EnvMap }
-  }>
-  write: (input: { settingsEnv: EnvMap; settingsLocalEnv: EnvMap }) => Promise<void>
+  read: () => Promise<ClaudeSettingsSource[]>
+  write: (sources: Array<{ path: string; env: EnvMap }>) => Promise<void>
 }
 
 type ShellEnvService = {
@@ -50,7 +47,6 @@ export function createInitCommand({
   historyService,
   renderFlow,
   renderEnvSummary,
-  homeDir,
 }: {
   claudeSettingsEnvService: ClaudeSettingsEnvService
   shellEnvService: ShellEnvService
@@ -68,24 +64,20 @@ export function createInitCommand({
     toFiles?: string[]
     footer?: React.ReactNode
   }) => Promise<void>
-  homeDir?: string
 }) {
   return async function init({ yes = false }: { yes?: boolean } = {}): Promise<void> {
     const sources = await claudeSettingsEnvService.read()
 
-    if (!sources.settings.exists && !sources.settingsLocal.exists) {
-      throw new CliError('Claude settings.json and settings.local.json were not found')
+    if (sources.every((s) => !s.exists)) {
+      throw new CliError('No Claude settings files were found')
     }
 
-    const effectiveEnv = envMapSchema.parse({
-      ...sources.settings.env,
-      ...sources.settingsLocal.env,
-    })
+    const effectiveEnv = envMapSchema.parse(
+      sources.reduce<Record<string, unknown>>((acc, source) => ({ ...acc, ...source.env }), {}),
+    )
     const keys = Object.keys(effectiveEnv).sort()
     const requiredKeys = requiredInitKeys.filter((key) => key in effectiveEnv)
-    const settingsPath = resolveClaudeSettingsPath(homeDir)
-    const settingsLocalPath = resolveClaudeSettingsLocalPath(homeDir)
-    const sourceFiles = [settingsPath, settingsLocalPath]
+    const sourceFiles = sources.map((s) => s.path)
     const result = await renderFlow({ keys, requiredKeys, yes, sourceFiles })
 
     if (!result?.confirmed) {
@@ -104,25 +96,16 @@ export function createInitCommand({
       throw new CliError('No selected env values found to migrate')
     }
 
-    const settingsBackup = envMapSchema.parse(
-      Object.fromEntries(
-        result.selectedKeys
-          .filter((key) => key in sources.settings.env)
-          .map((key) => [key, sources.settings.env[key]]),
+    const initSources: SourceEntry[] = sources.map((source) => ({
+      file: source.path,
+      backup: envMapSchema.parse(
+        Object.fromEntries(
+          result.selectedKeys
+            .filter((key) => key in source.env)
+            .map((key) => [key, source.env[key]]),
+        ),
       ),
-    )
-    const settingsLocalBackup = envMapSchema.parse(
-      Object.fromEntries(
-        result.selectedKeys
-          .filter((key) => key in sources.settingsLocal.env)
-          .map((key) => [key, sources.settingsLocal.env[key]]),
-      ),
-    )
-
-    const initSources: SourceEntry[] = [
-      { file: settingsPath, backup: settingsBackup },
-      { file: settingsLocalPath, backup: settingsLocalBackup },
-    ]
+    }))
 
     const timestamp = new Date().toISOString()
     const shellWrites = await shellEnvService.write(migratedEnv)
@@ -135,10 +118,12 @@ export function createInitCommand({
       shellWrites,
     })
 
-    await claudeSettingsEnvService.write({
-      settingsEnv: omitKeys(sources.settings.env, result.selectedKeys),
-      settingsLocalEnv: omitKeys(sources.settingsLocal.env, result.selectedKeys),
-    })
+    await claudeSettingsEnvService.write(
+      sources.map((source) => ({
+        path: source.path,
+        env: omitKeys(source.env, result.selectedKeys),
+      })),
+    )
 
     await renderEnvSummary({
       title: 'Migrated',

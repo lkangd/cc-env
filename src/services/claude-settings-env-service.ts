@@ -4,18 +4,24 @@ import { atomicWriteFile } from '../core/fs.js'
 import {
   resolveClaudeSettingsLocalPath,
   resolveClaudeSettingsPath,
+  resolveProjectSettingsLocalPath,
+  resolveProjectSettingsPath,
 } from '../core/paths.js'
 import { envMapSchema, type EnvMap } from '../core/schema.js'
 
-type ClaudeSettingsSource = {
+export type ClaudeSettingsSource = {
   path: string
   exists: boolean
   env: EnvMap
 }
 
-export function createClaudeSettingsEnvService({ homeDir }: { homeDir?: string } = {}) {
-  const settingsPath = resolveClaudeSettingsPath(homeDir)
-  const settingsLocalPath = resolveClaudeSettingsLocalPath(homeDir)
+export function createClaudeSettingsEnvService({ homeDir, cwd }: { homeDir?: string; cwd?: string } = {}) {
+  const paths = [
+    resolveClaudeSettingsPath(homeDir),
+    resolveClaudeSettingsLocalPath(homeDir),
+    resolveProjectSettingsPath(cwd),
+    resolveProjectSettingsLocalPath(cwd),
+  ]
 
   async function readOne(path: string): Promise<ClaudeSettingsSource> {
     try {
@@ -56,19 +62,11 @@ export function createClaudeSettingsEnvService({ homeDir }: { homeDir?: string }
   }
 
   return {
-    read: async () => ({
-      settings: await readOne(settingsPath),
-      settingsLocal: await readOne(settingsLocalPath),
-    }),
-    write: async ({
-      settingsEnv,
-      settingsLocalEnv,
-    }: {
-      settingsEnv: EnvMap
-      settingsLocalEnv: EnvMap
-    }) => {
-      await writeOne(settingsPath, settingsEnv)
-      await writeOne(settingsLocalPath, settingsLocalEnv)
+    read: () => Promise.all(paths.map(readOne)),
+    write: async (sources: Array<{ path: string; env: EnvMap }>) => {
+      for (const { path, env } of sources) {
+        await writeOne(path, env)
+      }
     },
   }
 }

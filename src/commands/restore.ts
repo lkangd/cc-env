@@ -2,8 +2,8 @@ import React from 'react'
 import { Box, Text } from 'ink'
 
 import { CliError } from '../core/errors.js'
-import { resolveClaudeSettingsLocalPath, resolveClaudeSettingsPath } from '../core/paths.js'
 import type { EnvMap, HistoryRecord, Preset } from '../core/schema.js'
+import type { ClaudeSettingsSource } from '../services/claude-settings-env-service.js'
 import type { ShellWriteRecord } from '../services/shell-env-service.js'
 
 const h = React.createElement
@@ -13,11 +13,8 @@ type HistoryService = {
 }
 
 type ClaudeSettingsEnvService = {
-  read: () => Promise<{
-    settings: { env: EnvMap }
-    settingsLocal: { env: EnvMap }
-  }>
-  write: (input: { settingsEnv: EnvMap; settingsLocalEnv: EnvMap }) => Promise<void>
+  read: () => Promise<ClaudeSettingsSource[]>
+  write: (sources: Array<{ path: string; env: EnvMap }>) => Promise<void>
 }
 
 type ShellEnvService = {
@@ -49,7 +46,6 @@ export function createRestoreCommand({
   presetService,
   renderFlow,
   renderEnvSummary,
-  homeDir,
 }: {
   historyService: HistoryService
   claudeSettingsEnvService: ClaudeSettingsEnvService
@@ -67,7 +63,6 @@ export function createRestoreCommand({
     toFiles?: string[]
     footer?: React.ReactNode
   }) => Promise<void>
-  homeDir?: string
 }) {
   return async function restore({ yes = false }: { yes?: boolean } = {}): Promise<void> {
     const records = await historyService.list()
@@ -84,27 +79,21 @@ export function createRestoreCommand({
     }
 
     if (record.action === 'init') {
-      const settingsPath = resolveClaudeSettingsPath(homeDir)
-      const settingsLocalPath = resolveClaudeSettingsLocalPath(homeDir)
-      const settingsSource = record.sources.find((s) => s.file === settingsPath)
-      const settingsLocalSource = record.sources.find((s) => s.file === settingsLocalPath)
-
       const mergedBackup = Object.fromEntries(
         record.sources.flatMap((s) => Object.entries(s.backup)),
       )
 
       const current = await claudeSettingsEnvService.read()
       await shellEnvService.removeKeys(record.shellWrites, record.migratedKeys)
-      await claudeSettingsEnvService.write({
-        settingsEnv: {
-          ...current.settings.env,
-          ...(settingsSource?.backup ?? {}),
-        },
-        settingsLocalEnv: {
-          ...current.settingsLocal.env,
-          ...(settingsLocalSource?.backup ?? {}),
-        },
-      })
+      await claudeSettingsEnvService.write(
+        current.map((source) => ({
+          path: source.path,
+          env: {
+            ...source.env,
+            ...(record.sources.find((s) => s.file === source.path)?.backup ?? {}),
+          },
+        })),
+      )
 
       await renderEnvSummary({
         title: 'Restored',

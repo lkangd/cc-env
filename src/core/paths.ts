@@ -16,6 +16,14 @@ export function resolveClaudeSettingsLocalPath(homeDir = process.env.HOME ?? pro
   return join(homeDir, '.claude', 'settings.local.json')
 }
 
+export function resolveProjectSettingsPath(cwd = process.cwd()): string {
+  return join(cwd, '.claude', 'settings.json')
+}
+
+export function resolveProjectSettingsLocalPath(cwd = process.cwd()): string {
+  return join(cwd, '.claude', 'settings.local.json')
+}
+
 export function resolveShellConfigPaths(homeDir = process.env.HOME ?? process.cwd()) {
   return {
     zsh: join(homeDir, '.zshrc'),

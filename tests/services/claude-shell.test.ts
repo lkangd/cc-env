@@ -14,38 +14,77 @@ afterEach(async () => {
 })
 
 describe('Claude settings env service', () => {
-  it('reads both settings files and keeps them separate', async () => {
+  it('reads all four settings files with correct priority order', async () => {
     const homeDir = await mkdtemp(join(tmpdir(), 'cc-env-home-'))
-    roots.push(homeDir)
+    const cwd = await mkdtemp(join(tmpdir(), 'cc-env-cwd-'))
+    roots.push(homeDir, cwd)
 
     await mkdir(join(homeDir, '.claude'), { recursive: true })
     await writeFile(
       join(homeDir, '.claude', 'settings.json'),
-      '{"env":{"ANTHROPIC_BASE_URL":"https://settings.example.com"}}\n',
+      '{"env":{"KEY_A":"global-settings","KEY_B":"global-only"}}\n',
       'utf8',
     )
     await writeFile(
       join(homeDir, '.claude', 'settings.local.json'),
-      '{"env":{"ANTHROPIC_AUTH_TOKEN":"local-token"}}\n',
+      '{"env":{"KEY_A":"global-local","KEY_C":"global-local-only"}}\n',
       'utf8',
     )
 
-    const service = createClaudeSettingsEnvService({ homeDir })
+    await mkdir(join(cwd, '.claude'), { recursive: true })
+    await writeFile(
+      join(cwd, '.claude', 'settings.json'),
+      '{"env":{"KEY_A":"project-settings","KEY_D":"project-only"}}\n',
+      'utf8',
+    )
+    await writeFile(
+      join(cwd, '.claude', 'settings.local.json'),
+      '{"env":{"KEY_A":"project-local","KEY_E":"project-local-only"}}\n',
+      'utf8',
+    )
 
-    await expect(service.read()).resolves.toMatchObject({
-      settings: {
-        exists: true,
-        env: {
-          ANTHROPIC_BASE_URL: 'https://settings.example.com',
-        },
-      },
-      settingsLocal: {
-        exists: true,
-        env: {
-          ANTHROPIC_AUTH_TOKEN: 'local-token',
-        },
-      },
+    const service = createClaudeSettingsEnvService({ homeDir, cwd })
+    const sources = await service.read()
+
+    expect(sources).toHaveLength(4)
+    expect(sources[0]).toMatchObject({
+      exists: true,
+      env: { KEY_A: 'global-settings', KEY_B: 'global-only' },
     })
+    expect(sources[1]).toMatchObject({
+      exists: true,
+      env: { KEY_A: 'global-local', KEY_C: 'global-local-only' },
+    })
+    expect(sources[2]).toMatchObject({
+      exists: true,
+      env: { KEY_A: 'project-settings', KEY_D: 'project-only' },
+    })
+    expect(sources[3]).toMatchObject({
+      exists: true,
+      env: { KEY_A: 'project-local', KEY_E: 'project-local-only' },
+    })
+  })
+
+  it('handles missing files gracefully', async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'cc-env-home-'))
+    const cwd = await mkdtemp(join(tmpdir(), 'cc-env-cwd-'))
+    roots.push(homeDir, cwd)
+
+    await mkdir(join(homeDir, '.claude'), { recursive: true })
+    await writeFile(
+      join(homeDir, '.claude', 'settings.json'),
+      '{"env":{"KEY_A":"global-settings"}}\n',
+      'utf8',
+    )
+
+    const service = createClaudeSettingsEnvService({ homeDir, cwd })
+    const sources = await service.read()
+
+    expect(sources).toHaveLength(4)
+    expect(sources[0].exists).toBe(true)
+    expect(sources[1].exists).toBe(false)
+    expect(sources[2].exists).toBe(false)
+    expect(sources[3].exists).toBe(false)
   })
 
   it('preserves sibling fields when writing updated env values', async () => {
@@ -76,10 +115,8 @@ describe('Claude settings env service', () => {
 
     const service = createClaudeSettingsEnvService({ homeDir })
 
-    await service.write({
-      settingsEnv: {},
-      settingsLocalEnv: {},
-    })
+    const sources = await service.read()
+    await service.write(sources.map((s) => ({ path: s.path, env: {} })))
 
     await expect(readFile(join(homeDir, '.claude', 'settings.json'), 'utf8')).resolves.toContain(
       '"theme": "dark"',
