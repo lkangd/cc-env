@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createRunCommand } from '../../src/commands/run.js'
 import { CliError } from '../../src/core/errors.js'
+import type { EnvMap } from '../../src/core/schema.js'
 
 const tempDirs: string[] = []
 
@@ -11,172 +12,217 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
+const emptySettingsSources = [
+  { path: '/home/.claude/settings.json', exists: false, env: {} as EnvMap },
+  { path: '/home/.claude/settings.local.json', exists: false, env: {} as EnvMap },
+  { path: '/project/.claude/settings.json', exists: false, env: {} as EnvMap },
+  { path: '/project/.claude/settings.local.json', exists: false, env: {} as EnvMap },
+]
+
+function createMocks(overrides: Partial<{
+  claudeSettingsEnvService: { read: () => Promise<typeof emptySettingsSources> }
+  presetService: { listNames: () => Promise<string[]>; read: (name: string) => Promise<{ env: EnvMap }> }
+  projectEnvService: { readWithMeta: () => Promise<{ env: EnvMap; name?: string }> }
+  projectStateService: { getLastPreset: () => Promise<unknown>; saveLastPreset: () => Promise<void> }
+  runtimeEnvService: { merge: () => EnvMap }
+  envSources: () => Promise<Record<string, EnvMap>>
+  findClaude: () => string
+  renderPresetSelect: () => Promise<unknown>
+  spawnCommand: () => Promise<void>
+  stdout: { write: () => void }
+}> = {}) {
+  const defaultPreset = { env: { OPENAI_API_KEY: 'sk-1234567890' } as EnvMap }
+  const presetItem = { name: 'openai', env: defaultPreset.env, source: 'global' as const }
+
+  return {
+    claudeSettingsEnvService: overrides.claudeSettingsEnvService ?? {
+      read: vi.fn().mockResolvedValue(emptySettingsSources),
+    },
+    presetService: overrides.presetService ?? {
+      listNames: vi.fn().mockResolvedValue(['openai']),
+      read: vi.fn().mockResolvedValue(defaultPreset),
+    },
+    projectEnvService: overrides.projectEnvService ?? {
+      readWithMeta: vi.fn().mockResolvedValue({ env: {} as EnvMap }),
+    },
+    projectStateService: overrides.projectStateService ?? {
+      getLastPreset: vi.fn().mockResolvedValue(undefined),
+      saveLastPreset: vi.fn().mockResolvedValue(undefined),
+    },
+    runtimeEnvService: overrides.runtimeEnvService ?? {
+      merge: vi.fn().mockReturnValue(defaultPreset.env),
+    },
+    envSources: overrides.envSources ?? vi.fn().mockResolvedValue({
+      processEnv: {},
+      settingsEnv: {},
+      projectEnv: {},
+      presetEnv: defaultPreset.env,
+    }),
+    findClaude: overrides.findClaude ?? vi.fn().mockReturnValue('/usr/local/bin/claude'),
+    renderPresetSelect: overrides.renderPresetSelect ?? vi.fn().mockResolvedValue(presetItem),
+    spawnCommand: overrides.spawnCommand ?? vi.fn().mockResolvedValue(undefined),
+    stdout: overrides.stdout ?? { write: vi.fn() },
+  }
+}
+
+function buildRun(mocks: ReturnType<typeof createMocks>) {
+  return createRunCommand({
+    claudeSettingsEnvService: mocks.claudeSettingsEnvService,
+    presetService: mocks.presetService,
+    projectEnvService: mocks.projectEnvService,
+    projectStateService: mocks.projectStateService,
+    runtimeEnvService: mocks.runtimeEnvService,
+    envSources: mocks.envSources,
+    findClaude: mocks.findClaude,
+    renderPresetSelect: mocks.renderPresetSelect,
+    spawnCommand: mocks.spawnCommand,
+    stdout: mocks.stdout,
+  })
+}
+
 describe('createRunCommand', () => {
-  it('throws a usage error when no command is provided', async () => {
-    const run = createRunCommand({
-      configService: {
-        read: vi.fn(),
-      },
-      presetService: {
-        read: vi.fn(),
-      },
-      envSources: vi.fn(),
-      runtimeEnvService: {
-        merge: vi.fn(),
-      },
-      spawnCommand: vi.fn(),
-    })
-
-    await expect(run({})).rejects.toEqual(new CliError('A command to run is required', 2))
-  })
-
-  it('throws when neither explicit nor default preset is available', async () => {
-    const run = createRunCommand({
-      configService: {
-        read: vi.fn().mockResolvedValue({}),
-      },
-      presetService: {
-        read: vi.fn(),
-      },
-      envSources: vi.fn(),
-      runtimeEnvService: {
-        merge: vi.fn(),
-      },
-      spawnCommand: vi.fn(),
-    })
-
-    await expect(
-      run({
-        command: 'node',
-        args: ['script.js'],
-      }),
-    ).rejects.toEqual(new CliError('No preset selected'))
-  })
-
-  it('prints a preview during dry-run and does not call spawnCommand', async () => {
-    const stdout = {
-      write: vi.fn(),
-    }
-    const spawnCommand = vi.fn()
-    const envSources = vi.fn().mockResolvedValue({
-      settingsEnv: {},
-      processEnv: {},
-      presetEnv: {
-        OPENAI_API_KEY: 'sk-1234567890',
-      },
-      projectEnv: {
-        BASE_URL: 'https://api.openai.com',
-      },
-    })
-    const merge = vi.fn().mockReturnValue({
-      OPENAI_API_KEY: 'sk-1234567890',
-      BASE_URL: 'https://api.openai.com',
-    })
-    const run = createRunCommand({
-      configService: {
-        read: vi.fn().mockResolvedValue({
-          defaultPreset: 'openai',
-        }),
-      },
-      presetService: {
-        read: vi.fn().mockResolvedValue({
-          name: 'openai',
-          env: {
-            OPENAI_API_KEY: 'sk-1234567890',
-          },
-        }),
-      },
-      envSources,
-      runtimeEnvService: {
-        merge,
-      },
-      spawnCommand,
-      stdout,
-    })
-
-    await run({
-      dryRun: true,
-      command: 'node',
-      args: ['script.js', '--flag'],
-    })
-
-    expect(envSources).toHaveBeenCalledWith({
-      preset: 'openai',
-      presetEnv: {
-        OPENAI_API_KEY: 'sk-1234567890',
-      },
-    })
-    expect(merge).toHaveBeenCalledWith({
-      settingsEnv: {},
-      processEnv: {},
-      presetEnv: {
-        OPENAI_API_KEY: 'sk-1234567890',
-      },
-      projectEnv: {
-        BASE_URL: 'https://api.openai.com',
-      },
-    })
-    expect(stdout.write).toHaveBeenCalledWith(
-      [
-        'Would run:',
-        'BASE_URL=https://api.openai.com',
-        'OPENAI_API_KEY=sk-123456********',
-        '',
-        'node script.js --flag',
-        '',
-      ].join('\n'),
+  it('throws when init-managed keys found in Claude settings', async () => {
+    const staleSources = emptySettingsSources.map((s, i) =>
+      i === 0 ? { ...s, exists: true, env: { ANTHROPIC_AUTH_TOKEN: 'sk-old' } as EnvMap } : s,
     )
-    expect(spawnCommand).not.toHaveBeenCalled()
+    const mocks = createMocks({
+      claudeSettingsEnvService: { read: vi.fn().mockResolvedValue(staleSources) },
+    })
+
+    await expect(buildRun(mocks)({ cwd: '/project' })).rejects.toEqual(
+      new CliError('Found init-managed keys in Claude settings: ANTHROPIC_AUTH_TOKEN. Run "cc-env init" first.'),
+    )
   })
 
-  it('quotes spaced dry-run args deterministically', async () => {
-    const stdout = {
-      write: vi.fn(),
-    }
-    const run = createRunCommand({
-      configService: {
-        read: vi.fn().mockResolvedValue({
-          defaultPreset: 'openai',
-        }),
-      },
+  it('throws when no presets exist', async () => {
+    const mocks = createMocks({
       presetService: {
-        read: vi.fn().mockResolvedValue({
-          env: {
-            OPENAI_API_KEY: 'sk-1234567890',
-          },
-        }),
+        listNames: vi.fn().mockResolvedValue([]),
+        read: vi.fn(),
       },
-      envSources: vi.fn().mockResolvedValue({
-        settingsEnv: {},
-        processEnv: {},
-        presetEnv: {
-          OPENAI_API_KEY: 'sk-1234567890',
-        },
-        projectEnv: {},
-      }),
-      runtimeEnvService: {
-        merge: vi.fn().mockReturnValue({
-          OPENAI_API_KEY: 'sk-1234567890',
-        }),
+      projectEnvService: {
+        readWithMeta: vi.fn().mockResolvedValue({ env: {} as EnvMap }),
       },
-      spawnCommand: vi.fn(),
-      stdout,
     })
 
-    await run({
-      dryRun: true,
-      command: 'node',
-      args: ['script.js', 'two words', 'say "hi"'],
-    })
-
-    expect(stdout.write).toHaveBeenCalledWith(
-      [
-        'Would run:',
-        'OPENAI_API_KEY=sk-123456********',
-        '',
-        'node script.js "two words" "say \\"hi\\""',
-        '',
-      ].join('\n'),
+    await expect(buildRun(mocks)({ cwd: '/project' })).rejects.toEqual(
+      new CliError('No presets found. Create one with "cc-env preset create".'),
     )
+  })
+
+  it('returns cleanly when user cancels preset selection', async () => {
+    const mocks = createMocks({
+      renderPresetSelect: vi.fn().mockResolvedValue(undefined),
+    })
+
+    await buildRun(mocks)({ cwd: '/project' })
+
+    expect(mocks.spawnCommand).not.toHaveBeenCalled()
+    expect(mocks.projectStateService.saveLastPreset).not.toHaveBeenCalled()
+  })
+
+  it('auto-finds claude when no args provided', async () => {
+    const mocks = createMocks({
+      findClaude: vi.fn().mockReturnValue('/usr/local/bin/claude'),
+    })
+
+    await buildRun(mocks)({ args: [], cwd: '/project' })
+
+    expect(mocks.findClaude).toHaveBeenCalled()
+    expect(mocks.spawnCommand).toHaveBeenCalledWith(
+      '/usr/local/bin/claude',
+      [],
+      expect.objectContaining({ OPENAI_API_KEY: 'sk-1234567890' }),
+    )
+  })
+
+  it('uses claude directly when args[0] is "claude"', async () => {
+    const mocks = createMocks()
+
+    await buildRun(mocks)({ args: ['claude', '--model', 'opus'], cwd: '/project' })
+
+    expect(mocks.findClaude).not.toHaveBeenCalled()
+    expect(mocks.spawnCommand).toHaveBeenCalledWith(
+      'claude',
+      ['--model', 'opus'],
+      expect.objectContaining({ OPENAI_API_KEY: 'sk-1234567890' }),
+    )
+  })
+
+  it('saves last-selected preset after selection', async () => {
+    const mocks = createMocks()
+
+    await buildRun(mocks)({ cwd: '/project' })
+
+    expect(mocks.projectStateService.saveLastPreset).toHaveBeenCalledWith('/project', {
+      presetName: 'openai',
+      source: 'global',
+    })
+  })
+
+  it('uses saved preset as default selection index', async () => {
+    const mocks = createMocks({
+      projectStateService: {
+        getLastPreset: vi.fn().mockResolvedValue({ presetName: 'openai', source: 'global' }),
+        saveLastPreset: vi.fn().mockResolvedValue(undefined),
+      },
+    })
+
+    await buildRun(mocks)({ cwd: '/project' })
+
+    expect(mocks.renderPresetSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultIndex: 0 }),
+    )
+  })
+
+  it('falls back to index 0 when saved preset no longer exists', async () => {
+    const mocks = createMocks({
+      projectStateService: {
+        getLastPreset: vi.fn().mockResolvedValue({ presetName: 'deleted', source: 'global' }),
+        saveLastPreset: vi.fn().mockResolvedValue(undefined),
+      },
+    })
+
+    await buildRun(mocks)({ cwd: '/project' })
+
+    expect(mocks.renderPresetSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultIndex: 0 }),
+    )
+  })
+
+  it('prints env vars and preset info before spawning', async () => {
+    const mocks = createMocks()
+
+    await buildRun(mocks)({ args: ['claude'], cwd: '/project' })
+
+    expect(mocks.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining('Using preset: openai (global)'),
+    )
+    expect(mocks.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining('OPENAI_API_KEY=sk-123456********'),
+    )
+  })
+
+  it('prints would-run in dry-run mode without spawning', async () => {
+    const mocks = createMocks()
+
+    await buildRun(mocks)({ args: ['claude', '--model', 'opus'], dryRun: true, cwd: '/project' })
+
+    expect(mocks.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining('Would run: claude --model opus'),
+    )
+    expect(mocks.spawnCommand).not.toHaveBeenCalled()
+  })
+
+  it('auto-selects default preset in yes mode without rendering UI', async () => {
+    const mocks = createMocks()
+
+    await buildRun(mocks)({ yes: true, cwd: '/project' })
+
+    expect(mocks.renderPresetSelect).not.toHaveBeenCalled()
+    expect(mocks.projectStateService.saveLastPreset).toHaveBeenCalledWith('/project', {
+      presetName: 'openai',
+      source: 'global',
+    })
   })
 })

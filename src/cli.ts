@@ -16,10 +16,12 @@ import { PresetDeleteApp } from './ink/preset-delete-app.js'
 import { createShowPresetsCommand } from './commands/preset/show.js'
 import { createRestoreCommand } from './commands/restore.js'
 import { createRunCommand } from './commands/run.js'
+import { findClaudeExecutable } from './core/find-claude.js'
 import { InitApp } from './ink/init-app.js'
 import { renderEnvSummary } from './ink/summary.js'
 import { PresetCreateApp } from './ink/preset-create-app.js'
 import { PresetShowApp } from './ink/preset-show-app.js'
+import { RunPresetSelectApp } from './ink/run-preset-select-app.js'
 import {
   advanceRestoreFlow,
   createRestoreFlowState,
@@ -34,6 +36,7 @@ import { createConfigService } from './services/config-service.js'
 import { createHistoryService } from './services/history-service.js'
 import { createPresetService } from './services/preset-service.js'
 import { createProjectEnvService } from './services/project-env-service.js'
+import { createProjectStateService } from './services/project-state-service.js'
 import { createRuntimeEnvService } from './services/runtime-env-service.js'
 import { createSettingsEnvService } from './services/settings-env-service.js'
 import { createShellEnvService } from './services/shell-env-service.js'
@@ -144,29 +147,49 @@ program.exitOverride().configureOutput({
   },
 })
 
-program.command('run [command] [args...]')
-  .description('Run a command with merged environment variables')
-  .option('-p, --preset <name>', 'Apply a saved preset by name')
+program.command('run [args...]')
+  .allowUnknownOption(true)
+  .description('Run claude with merged environment variables')
   .option('--dry-run', 'Preview the merged env without executing')
-  .action((command, args, options) =>
-    createRunCommand({
-      configService,
+  .option('-y, --yes', 'Auto-select the default preset without interactive prompts')
+  .action((args, options) => {
+    const rawArgs = args ?? []
+
+    return createRunCommand({
+      claudeSettingsEnvService,
       presetService,
-      envSources: async ({ preset: _preset, presetEnv }) => ({
+      projectEnvService,
+      projectStateService: createProjectStateService(globalRoot),
+      runtimeEnvService,
+      envSources: async ({ presetEnv }) => ({
         processEnv: toProcessEnvMap(process.env),
         settingsEnv: await settingsEnvService.read(),
         projectEnv: await projectEnvService.read(),
         presetEnv,
       }),
-      runtimeEnvService,
+      findClaude: findClaudeExecutable,
+      renderPresetSelect: async ({ presets, defaultIndex }) => {
+        let result: (typeof presets)[number] | undefined
+        const app = render(
+          h(RunPresetSelectApp, {
+            presets,
+            defaultIndex,
+            onSubmit: (preset) => {
+              result = preset
+            },
+          }),
+        )
+        await app.waitUntilExit()
+        return result
+      },
       spawnCommand,
     })({
-      preset: options.preset,
-      dryRun: options.dryRun,
-      command,
-      args,
-    }),
-  )
+      args: rawArgs,
+      dryRun: options.dryRun ?? false,
+      yes: options.yes ?? false,
+      cwd,
+    })
+  })
 
 program.command('init')
   .description('Initialize cc-env for the current project')

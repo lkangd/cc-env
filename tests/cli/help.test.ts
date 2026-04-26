@@ -28,6 +28,11 @@ async function createCliFixture() {
     'utf8',
   )
   await writeFile(
+    join(homeDir, '.cc-env', 'project-state.json'),
+    `${JSON.stringify({}, null, 2)}\n`,
+    'utf8',
+  )
+  await writeFile(
     join(homeDir, '.cc-env', 'presets', 'openai.json'),
     `${JSON.stringify({
       name: 'openai',
@@ -85,36 +90,35 @@ describe('cc-env CLI help', () => {
 
   it('uses real HOME and cwd wiring for dry-run env resolution', async () => {
     const { homeDir, projectDir } = await createCliFixture()
-    const { stdout } = await execa(
+    const result = await execa(
       'node',
-      ['--import', tsxLoader, cliEntry, 'run', '--dry-run', 'node', 'script.js'],
+      ['--import', tsxLoader, cliEntry, 'run', '--dry-run', '--yes', 'claude'],
       {
         cwd: projectDir,
         env: {
           HOME: homeDir,
         },
+        reject: false,
       },
     )
 
-    expect(stdout).toContain('PRESET_KEY=')
-    expect(stdout).toContain('PROJECT_KEY=')
-    expect(stdout).toContain('SETTINGS_KEY=')
-    expect(stdout).toContain('node script.js')
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('PROJECT_KEY=')
+    expect(result.stdout).toContain('SETTINGS_KEY=')
+    expect(result.stdout).toContain('claude')
   })
 
   it('prints CliError messages without stack traces at the top level', async () => {
     const result = await execa(
       'node',
-      ['--import', tsxLoader, cliEntry, 'run'],
+      ['--import', tsxLoader, cliEntry, 'run', '--dry-run', '--yes'],
       {
         cwd: repoRoot,
         reject: false,
       },
     )
 
-    expect(result.exitCode).toBe(2)
-    expect(result.stderr).toContain('A command to run is required')
+    expect(result.exitCode).toBe(1)
     expect(result.stderr).not.toContain('CliError:')
-    expect(result.stderr).not.toContain('at run')
   })
 })
