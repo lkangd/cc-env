@@ -13,7 +13,6 @@ import { createInitCommand } from './commands/init.js'
 import { createPresetCreateCommand } from './commands/preset/create.js'
 import { createDeletePresetCommand } from './commands/preset/delete.js'
 import { PresetDeleteApp } from './ink/preset-delete-app.js'
-import { createEditPresetCommand } from './commands/preset/edit.js'
 import { createShowPresetsCommand } from './commands/preset/show.js'
 import { createRestoreCommand } from './commands/restore.js'
 import { createRunCommand } from './commands/run.js'
@@ -249,9 +248,6 @@ presetCommand.command('delete').action(
       return result
     },
   }),
-)
-presetCommand.command('edit <name>').action(
-  createEditPresetCommand({ presetService }),
 )
 presetCommand.command('create')
   .action(() =>

@@ -81,7 +81,6 @@ describe('cc-env CLI help', () => {
 
     expect(stdout).toContain('show')
     expect(stdout).toContain('delete')
-    expect(stdout).toContain('edit <name>')
   })
 
   it('uses real HOME and cwd wiring for dry-run env resolution', async () => {
