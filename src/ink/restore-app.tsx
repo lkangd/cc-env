@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 
 import { advanceRestoreFlow, type RestoreFlowState } from '../flows/restore-flow.js'
+import { EnvEntries, EnvSummary } from './summary.js'
 
 export function RestoreApp({
   state,
@@ -32,7 +33,7 @@ export function RestoreApp({
             activeRecord.action === 'init'
               ? Object.fromEntries(activeRecord.sources.flatMap((s) => Object.entries(s.backup)))
               : activeRecord.backup,
-          ).sort(([left], [right]) => left.localeCompare(right))
+          ).sort(([left], [right]) => left.localeCompare(right)) as [string, string][]
         : [],
     [activeRecord],
   )
@@ -181,18 +182,7 @@ export function RestoreApp({
                 </Text>
               )}
               <Box flexDirection="column" marginTop={1}>
-                {restoreEntries.length === 0 ? (
-                  <Text dimColor>none</Text>
-                ) : (
-                  restoreEntries.map(([key, value]) => (
-                    <Box key={key}>
-                      <Text color="yellow">• </Text>
-                      <Text color="magenta">{key}</Text>
-                      <Text dimColor>=</Text>
-                      <Text color="white">{value}</Text>
-                    </Box>
-                  ))
-                )}
+                <EnvEntries entries={restoreEntries} />
               </Box>
             </Box>
           </Box>
@@ -208,37 +198,12 @@ export function RestoreApp({
           <Text>
             Confirm restore from <Text color="cyan">{selectedRecord.timestamp}</Text>
           </Text>
-          {fromFiles.length > 0 ? (
-            <Box flexDirection="column">
-              <Text dimColor>From:</Text>
-              {fromFiles.map((file) => (
-                <Text key={file} color="cyan">  {file}</Text>
-              ))}
-            </Box>
-          ) : null}
-          {toFiles.length > 0 ? (
-            <Box flexDirection="column">
-              <Text dimColor>To:</Text>
-              {toFiles.map((file) => (
-                <Text key={file} color="cyan">  {file}</Text>
-              ))}
-            </Box>
-          ) : null}
-          <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="green" paddingX={1}>
-            <Text bold color="green">Will restore</Text>
-            {restoreEntries.length === 0 ? (
-              <Text dimColor>none</Text>
-            ) : (
-              restoreEntries.map(([key, value]) => (
-                <Box key={key}>
-                  <Text color="yellow">• </Text>
-                  <Text color="magenta">{key}</Text>
-                  <Text dimColor>=</Text>
-                  <Text color="white">{value}</Text>
-                </Box>
-              ))
-            )}
-          </Box>
+          <EnvSummary
+            title="Will restore"
+            entries={restoreEntries}
+            {...(fromFiles.length > 0 ? { fromFiles } : {})}
+            {...(toFiles.length > 0 ? { toFiles } : {})}
+          />
         </Box>
       ) : null}
       {currentState.step === 'confirm' && selectedRecord?.action !== 'init' ? (
@@ -251,21 +216,7 @@ export function RestoreApp({
                 : currentState.targetType ?? 'settings'}
             </Text>
           </Text>
-          <Box flexDirection="column" marginTop={1} borderStyle="round" borderColor="green" paddingX={1}>
-            <Text bold color="green">Will restore</Text>
-            {restoreEntries.length === 0 ? (
-              <Text dimColor>none</Text>
-            ) : (
-              restoreEntries.map(([key, value]) => (
-                <Box key={key}>
-                  <Text color="yellow">• </Text>
-                  <Text color="magenta">{key}</Text>
-                  <Text dimColor>=</Text>
-                  <Text color="white">{value}</Text>
-                </Box>
-              ))
-            )}
-          </Box>
+          <EnvSummary title="Will restore" entries={restoreEntries} />
         </Box>
       ) : null}
       {currentState.step === 'done' ? (

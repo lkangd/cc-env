@@ -16,6 +16,7 @@ import { createShowPresetCommand } from './commands/preset/show.js'
 import { createRestoreCommand } from './commands/restore.js'
 import { createRunCommand } from './commands/run.js'
 import { InitApp } from './ink/init-app.js'
+import { renderEnvSummary } from './ink/summary.js'
 import { PresetCreateApp } from './ink/preset-create-app.js'
 import {
   advanceRestoreFlow,
@@ -166,6 +167,7 @@ program.command('init')
       shellEnvService,
       historyService,
       homeDir,
+      renderEnvSummary,
       renderFlow: async (context) => {
         if (context.yes) {
           return {
@@ -208,6 +210,7 @@ program.command('restore')
       settingsEnvService,
       presetService,
       homeDir,
+      renderEnvSummary: renderEnvSummary,
       renderFlow: (context) => runRestoreFlow(context),
     })({
       yes: options.yes,

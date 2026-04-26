@@ -1,7 +1,12 @@
+import React from 'react'
+import { Box, Text } from 'ink'
+
 import { CliError } from '../core/errors.js'
 import { resolveClaudeSettingsLocalPath, resolveClaudeSettingsPath } from '../core/paths.js'
 import { envMapSchema, type EnvMap, type InitHistoryRecord, type SourceEntry } from '../core/schema.js'
 import type { ShellWriteRecord } from '../services/shell-env-service.js'
+
+const h = React.createElement
 
 const requiredInitKeys = [
   'ANTHROPIC_AUTH_TOKEN',
@@ -44,8 +49,8 @@ export function createInitCommand({
   shellEnvService,
   historyService,
   renderFlow,
+  renderEnvSummary,
   homeDir,
-  stdout = process.stdout,
 }: {
   claudeSettingsEnvService: ClaudeSettingsEnvService
   shellEnvService: ShellEnvService
@@ -56,8 +61,14 @@ export function createInitCommand({
     yes: boolean
     sourceFiles: string[]
   }) => Promise<InitFlowResult | void> | InitFlowResult | void
+  renderEnvSummary: (props: {
+    title: string
+    env: EnvMap
+    fromFiles?: string[]
+    toFiles?: string[]
+    footer?: React.ReactNode
+  }) => Promise<void>
   homeDir?: string
-  stdout?: Pick<NodeJS.WriteStream, 'write'>
 }) {
   return async function init({ yes = false }: { yes?: boolean } = {}): Promise<void> {
     const sources = await claudeSettingsEnvService.read()
@@ -128,8 +139,16 @@ export function createInitCommand({
       settingsEnv: omitKeys(sources.settings.env, result.selectedKeys),
       settingsLocalEnv: omitKeys(sources.settingsLocal.env, result.selectedKeys),
     })
-    stdout.write(
-      '\nInit complete\n\x1b[1;32mPlease restart your terminal for the migrated environment variables to take effect.\x1b[0m\n',
-    )
+
+    await renderEnvSummary({
+      title: 'Migrated',
+      env: migratedEnv,
+      fromFiles: initSources.map((s) => s.file),
+      toFiles: shellWrites.map((sw) => sw.filePath),
+      footer: h(Box, { flexDirection: 'column' },
+        h(Text, { color: 'green' }, 'Init complete'),
+        h(Text, { bold: true, color: 'green' }, 'Please restart your terminal for the migrated environment variables to take effect.'),
+      ),
+    })
   }
 }

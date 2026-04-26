@@ -1,7 +1,12 @@
+import React from 'react'
+import { Box, Text } from 'ink'
+
 import { CliError } from '../core/errors.js'
 import { resolveClaudeSettingsLocalPath, resolveClaudeSettingsPath } from '../core/paths.js'
 import type { EnvMap, HistoryRecord, Preset } from '../core/schema.js'
 import type { ShellWriteRecord } from '../services/shell-env-service.js'
+
+const h = React.createElement
 
 type HistoryService = {
   list: () => Promise<HistoryRecord[]>
@@ -43,8 +48,8 @@ export function createRestoreCommand({
   settingsEnvService,
   presetService,
   renderFlow,
+  renderEnvSummary,
   homeDir,
-  stdout = process.stdout,
 }: {
   historyService: HistoryService
   claudeSettingsEnvService: ClaudeSettingsEnvService
@@ -55,8 +60,14 @@ export function createRestoreCommand({
     records: HistoryRecord[]
     yes: boolean
   }) => Promise<RestoreFlowResult | void> | RestoreFlowResult | void
+  renderEnvSummary: (props: {
+    title: string
+    env: EnvMap
+    fromFiles?: string[]
+    toFiles?: string[]
+    footer?: React.ReactNode
+  }) => Promise<void>
   homeDir?: string
-  stdout?: Pick<NodeJS.WriteStream, 'write'>
 }) {
   return async function restore({ yes = false }: { yes?: boolean } = {}): Promise<void> {
     const records = await historyService.list()
@@ -78,6 +89,10 @@ export function createRestoreCommand({
       const settingsSource = record.sources.find((s) => s.file === settingsPath)
       const settingsLocalSource = record.sources.find((s) => s.file === settingsLocalPath)
 
+      const mergedBackup = Object.fromEntries(
+        record.sources.flatMap((s) => Object.entries(s.backup)),
+      )
+
       const current = await claudeSettingsEnvService.read()
       await shellEnvService.removeKeys(record.shellWrites, record.migratedKeys)
       await claudeSettingsEnvService.write({
@@ -90,7 +105,17 @@ export function createRestoreCommand({
           ...(settingsLocalSource?.backup ?? {}),
         },
       })
-      stdout.write('\nRestore complete\n')
+
+      await renderEnvSummary({
+        title: 'Restored',
+        env: mergedBackup,
+        fromFiles: record.shellWrites.map((sw) => sw.filePath),
+        toFiles: record.sources.map((s) => s.file),
+        footer: h(Box, { flexDirection: 'column' },
+          h(Text, { color: 'green' }, 'Restore complete'),
+          h(Text, { bold: true, color: 'green' }, 'Please restart your terminal for the restored environment variables to take effect.'),
+        ),
+      })
       return
     }
 
@@ -100,7 +125,15 @@ export function createRestoreCommand({
         ...currentSettings,
         ...record.backup,
       })
-      stdout.write('\nRestore complete\n')
+
+      await renderEnvSummary({
+        title: 'Restored to settings',
+        env: record.backup,
+        footer: h(Box, { flexDirection: 'column' },
+          h(Text, { color: 'green' }, 'Restore complete'),
+          h(Text, { bold: true, color: 'green' }, 'Please restart your terminal for the restored environment variables to take effect.'),
+        ),
+      })
       return
     }
 
@@ -115,6 +148,14 @@ export function createRestoreCommand({
         ...record.backup,
       },
     })
-    stdout.write('\nRestore complete\n')
+
+    await renderEnvSummary({
+      title: `Restored to preset ${presetName}`,
+      env: record.backup,
+      footer: h(Box, { flexDirection: 'column' },
+        h(Text, { color: 'green' }, 'Restore complete'),
+        h(Text, { bold: true, color: 'green' }, 'Please restart your terminal for the restored environment variables to take effect.'),
+      ),
+    })
   }
 }

@@ -49,7 +49,7 @@ describe('createInitCommand', () => {
       historyService,
       homeDir: '/Users/test',
       renderFlow,
-      stdout: { write: vi.fn() },
+      renderEnvSummary: vi.fn().mockResolvedValue(undefined),
     })
 
     await expect(init({ yes: false })).resolves.toBeUndefined()
@@ -113,7 +113,7 @@ describe('createInitCommand', () => {
       historyService: { write: vi.fn() },
       homeDir: '/Users/test',
       renderFlow: vi.fn(),
-      stdout: { write: vi.fn() },
+      renderEnvSummary: vi.fn().mockResolvedValue(undefined),
     })
 
     await expect(init({ yes: false })).rejects.toMatchObject({
@@ -184,6 +184,7 @@ describe('createRestoreCommand', () => {
       },
       presetService,
       homeDir: '/Users/test',
+      renderEnvSummary: vi.fn().mockResolvedValue(undefined),
       renderFlow,
     })
 
@@ -299,6 +300,7 @@ describe('createRestoreCommand', () => {
       },
       presetService,
       homeDir: '/Users/test',
+      renderEnvSummary: vi.fn().mockResolvedValue(undefined),
       renderFlow,
     })
 
@@ -374,6 +376,7 @@ describe('createRestoreCommand', () => {
       settingsEnvService,
       presetService,
       homeDir: '/Users/test',
+      renderEnvSummary: vi.fn().mockResolvedValue(undefined),
       renderFlow,
     })
 
