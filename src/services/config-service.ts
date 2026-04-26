@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises'
 
 import { configSchema, type Config } from '../core/schema.js'
 import { atomicWriteFile } from '../core/fs.js'
-import { withFileLock } from '../core/lock.js'
 import { resolveConfigPath } from '../core/paths.js'
 
 export function createConfigService(globalRoot: string) {
@@ -24,11 +23,8 @@ export function createConfigService(globalRoot: string) {
 
     async write(config: Config): Promise<Config> {
       const parsed = configSchema.parse(config)
-
-      return withFileLock(filePath, async () => {
-        await atomicWriteFile(filePath, `${JSON.stringify(parsed, null, 2)}\n`)
-        return parsed
-      })
+      await atomicWriteFile(filePath, `${JSON.stringify(parsed, null, 2)}\n`)
+      return parsed
     },
   }
 }

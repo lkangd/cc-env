@@ -1,7 +1,6 @@
 import { access, mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import lockfile from 'proper-lockfile'
 import { parse, stringify } from 'yaml'
 
 import { atomicWriteFile } from '../core/fs.js'
@@ -38,7 +37,6 @@ export function createProjectEnvService({ cwd }: { cwd: string }) {
   const envDir = join(cwd, '.cc-env')
   const jsonPath = join(envDir, 'env.json')
   const yamlPath = join(envDir, 'env.yaml')
-  const lockPath = join(envDir, '.env.lock')
 
   async function exists(filePath: string): Promise<boolean> {
     try {
@@ -69,32 +67,6 @@ export function createProjectEnvService({ cwd }: { cwd: string }) {
     }
 
     return 'missing'
-  }
-
-  async function withProjectEnvLock<T>(run: () => Promise<T>): Promise<T> {
-    await mkdir(envDir, { recursive: true })
-    await access(lockPath).catch(async (error) => {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        await atomicWriteFile(lockPath, '')
-        return
-      }
-
-      throw error
-    })
-
-    const release = await lockfile.lock(lockPath, {
-      realpath: false,
-      retries: {
-        retries: 3,
-        factor: 1,
-      },
-    })
-
-    try {
-      return await run()
-    } finally {
-      await release()
-    }
   }
 
   async function readRaw(): Promise<{
@@ -132,27 +104,25 @@ export function createProjectEnvService({ cwd }: { cwd: string }) {
 
     async write(env: EnvMap, meta?: ProjectEnvMeta): Promise<EnvMap> {
       const parsedEnv = envMapSchema.parse(env)
+      await mkdir(envDir, { recursive: true })
+      const mode = await resolveMode()
 
-      return withProjectEnvLock(async () => {
-        const mode = await resolveMode()
-
-        if (meta?.name !== undefined) {
-          const envelope: Record<string, unknown> = { name: meta.name, env: parsedEnv }
-          if (meta.createdAt !== undefined) envelope.createdAt = meta.createdAt
-          if (meta.updatedAt !== undefined) envelope.updatedAt = meta.updatedAt
-          const content = `${JSON.stringify(envelope, null, 2)}\n`
-          await atomicWriteFile(jsonPath, content)
-          return parsedEnv
-        }
-
-        const filePath = mode === 'yaml' ? yamlPath : jsonPath
-        const content = mode === 'yaml'
-          ? stringify(parsedEnv)
-          : `${JSON.stringify(parsedEnv, null, 2)}\n`
-
-        await atomicWriteFile(filePath, content)
+      if (meta?.name !== undefined) {
+        const envelope: Record<string, unknown> = { name: meta.name, env: parsedEnv }
+        if (meta.createdAt !== undefined) envelope.createdAt = meta.createdAt
+        if (meta.updatedAt !== undefined) envelope.updatedAt = meta.updatedAt
+        const content = `${JSON.stringify(envelope, null, 2)}\n`
+        await atomicWriteFile(jsonPath, content)
         return parsedEnv
-      })
+      }
+
+      const filePath = mode === 'yaml' ? yamlPath : jsonPath
+      const content = mode === 'yaml'
+        ? stringify(parsedEnv)
+        : `${JSON.stringify(parsedEnv, null, 2)}\n`
+
+      await atomicWriteFile(filePath, content)
+      return parsedEnv
     },
   }
 }

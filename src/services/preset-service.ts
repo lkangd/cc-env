@@ -3,7 +3,6 @@ import { dirname } from 'node:path'
 
 import { CliError } from '../core/errors.js'
 import { atomicWriteFile } from '../core/fs.js'
-import { withFileLock } from '../core/lock.js'
 import { resolvePresetPath } from '../core/paths.js'
 import { presetSchema, type Preset } from '../core/schema.js'
 
@@ -20,11 +19,8 @@ export function createPresetService(globalRoot: string) {
     async write(preset: Preset): Promise<StoredPreset> {
       const parsed = presetSchema.parse(preset)
       const filePath = getPath(parsed.name)
-
-      return withFileLock(filePath, async () => {
-        await atomicWriteFile(filePath, `${JSON.stringify(parsed, null, 2)}\n`)
-        return { ...parsed, filePath }
-      })
+      await atomicWriteFile(filePath, `${JSON.stringify(parsed, null, 2)}\n`)
+      return { ...parsed, filePath }
     },
 
     async read(name: string): Promise<StoredPreset> {
@@ -64,15 +60,13 @@ export function createPresetService(globalRoot: string) {
     async remove(name: string): Promise<void> {
       const filePath = getPath(name)
 
-      await withFileLock(filePath, async () => {
-        try {
-          await rm(filePath)
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-            throw error
-          }
+      try {
+        await rm(filePath)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error
         }
-      })
+      }
     },
   }
 }

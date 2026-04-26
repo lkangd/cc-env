@@ -2,7 +2,6 @@ import { readdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import { atomicWriteFile, ensureParentDir } from '../core/fs.js'
-import { withFileLock } from '../core/lock.js'
 import { resolveHistoryPath } from '../core/paths.js'
 import { historySchema } from '../core/schema.js'
 import type { HistoryRecord } from '../core/schema.js'
@@ -17,11 +16,8 @@ export function createHistoryService(globalRoot: string) {
       const stored = historySchema.parse(record)
       const filePath = resolveHistoryPath(globalRoot, stored.timestamp)
       await ensureParentDir(filePath)
-
-      return withFileLock(filePath, async () => {
-        await atomicWriteFile(filePath, `${JSON.stringify(stored, null, 2)}\n`)
-        return stored
-      })
+      await atomicWriteFile(filePath, `${JSON.stringify(stored, null, 2)}\n`)
+      return stored
     },
 
     async list(): Promise<HistoryRecord[]> {

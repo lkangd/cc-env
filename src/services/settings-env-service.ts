@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises'
 
 import { atomicWriteFile } from '../core/fs.js'
-import { withFileLock } from '../core/lock.js'
 import { envMapSchema, type EnvMap } from '../core/schema.js'
 
 export function createSettingsEnvService({ settingsPath }: { settingsPath: string }) {
@@ -22,23 +21,20 @@ export function createSettingsEnvService({ settingsPath }: { settingsPath: strin
 
     async write(env: EnvMap): Promise<EnvMap> {
       const parsedEnv = envMapSchema.parse(env)
+      let json: Record<string, unknown> = {}
 
-      return withFileLock(settingsPath, async () => {
-        let json: Record<string, unknown> = {}
-
-        try {
-          const content = await readFile(settingsPath, 'utf8')
-          json = JSON.parse(content) as Record<string, unknown>
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-            throw error
-          }
+      try {
+        const content = await readFile(settingsPath, 'utf8')
+        json = JSON.parse(content) as Record<string, unknown>
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error
         }
+      }
 
-        json.env = parsedEnv
-        await atomicWriteFile(settingsPath, `${JSON.stringify(json, null, 2)}\n`)
-        return parsedEnv
-      })
+      json.env = parsedEnv
+      await atomicWriteFile(settingsPath, `${JSON.stringify(json, null, 2)}\n`)
+      return parsedEnv
     },
   }
 }

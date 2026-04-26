@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { atomicWriteFile } from '../../src/core/fs.js'
-import { withFileLock } from '../../src/core/lock.js'
 import { CliError } from '../../src/core/errors.js'
 import type { HistoryRecord } from '../../src/core/schema.js'
 import { createConfigService } from '../../src/services/config-service.js'
@@ -78,34 +77,6 @@ describe('preset service', () => {
     await service.remove('openai')
 
     await expect(service.listNames()).resolves.toEqual([])
-    await expect(service.read('openai')).rejects.toThrowError(new CliError('Preset not found: openai'))
-  })
-
-  it('removes a preset while holding the file lock', async () => {
-    const globalRoot = await createTempRoot()
-    const service = createPresetService(globalRoot)
-
-    const stored = await service.write({
-      name: 'openai',
-      createdAt: '2026-04-24T12:00:00.000Z',
-      updatedAt: '2026-04-24T12:00:00.000Z',
-      env: {
-        OPENAI_API_KEY: 'sk-123',
-      },
-    })
-
-    let removal: Promise<void> | undefined
-
-    await withFileLock(stored.filePath, async () => {
-      removal = service.remove('openai')
-
-      await expect(Promise.race([
-        removal.then(() => 'removed'),
-        new Promise((resolve) => setTimeout(() => resolve('waiting'), 25)),
-      ])).resolves.toBe('waiting')
-    })
-
-    await expect(removal).resolves.toBeUndefined()
     await expect(service.read('openai')).rejects.toThrowError(new CliError('Preset not found: openai'))
   })
 })

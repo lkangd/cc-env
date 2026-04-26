@@ -17,19 +17,3 @@ declare module 'cross-spawn' {
     options?: SpawnOptions,
   ): ChildProcessLike
 }
-
-declare module 'proper-lockfile' {
-  export type LockOptions = {
-    realpath?: boolean
-    retries?: {
-      retries: number
-      factor: number
-    }
-  }
-
-  const lockfile: {
-    lock(file: string, options?: LockOptions): Promise<() => Promise<void>>
-  }
-
-  export default lockfile
-}
