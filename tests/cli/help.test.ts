@@ -80,7 +80,7 @@ describe('cc-env CLI help', () => {
     })
 
     expect(stdout).toContain('show')
-    expect(stdout).toContain('delete <name>')
+    expect(stdout).toContain('delete')
     expect(stdout).toContain('edit <name>')
   })
 

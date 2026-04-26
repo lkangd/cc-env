@@ -12,6 +12,7 @@ import { createDebugCommand } from './commands/debug.js'
 import { createInitCommand } from './commands/init.js'
 import { createPresetCreateCommand } from './commands/preset/create.js'
 import { createDeletePresetCommand } from './commands/preset/delete.js'
+import { PresetDeleteApp } from './ink/preset-delete-app.js'
 import { createEditPresetCommand } from './commands/preset/edit.js'
 import { createShowPresetsCommand } from './commands/preset/show.js'
 import { createRestoreCommand } from './commands/restore.js'
@@ -230,8 +231,24 @@ presetCommand.command('show').action(
     },
   }),
 )
-presetCommand.command('delete <name>').action(
-  createDeletePresetCommand({ presetService }),
+presetCommand.command('delete').action(
+  createDeletePresetCommand({
+    presetService,
+    projectEnvService,
+    renderDelete: async (presets) => {
+      let result: (typeof presets)[number] | undefined
+      const app = render(
+        h(PresetDeleteApp, {
+          presets,
+          onSubmit: (preset) => {
+            result = preset
+          },
+        }),
+      )
+      await app.waitUntilExit()
+      return result
+    },
+  }),
 )
 presetCommand.command('edit <name>').action(
   createEditPresetCommand({ presetService }),

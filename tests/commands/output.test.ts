@@ -40,16 +40,89 @@ describe('formatRestorePreview', () => {
 })
 
 describe('createDeletePresetCommand', () => {
-  it('prints a success message after deleting a preset', async () => {
+  it('deletes selected global preset and prints success message', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined)
     const deletePreset = createDeletePresetCommand({
       presetService: {
-        remove: vi.fn().mockResolvedValue(undefined),
+        listNames: vi.fn().mockResolvedValue(['openai', 'anthropic']),
+        read: vi.fn().mockResolvedValue({ env: { API_KEY: 'test' } }),
+        remove,
       },
+      projectEnvService: {
+        readWithMeta: vi.fn().mockResolvedValue({ env: {} }),
+        write: vi.fn(),
+      },
+      renderDelete: vi.fn().mockResolvedValue({ name: 'anthropic', env: { API_KEY: 'test' }, source: 'global' }),
     })
 
-    await deletePreset('openai')
+    await deletePreset()
 
-    expect(logSpy).toHaveBeenCalledWith('Deleted preset: openai')
+    expect(remove).toHaveBeenCalledWith('anthropic')
+    expect(logSpy).toHaveBeenCalledWith('Deleted preset: anthropic')
+  })
+
+  it('deletes project preset by writing empty env', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined)
+    const write = vi.fn().mockResolvedValue({})
+    const deletePreset = createDeletePresetCommand({
+      presetService: {
+        listNames: vi.fn().mockResolvedValue([]),
+        read: vi.fn(),
+        remove,
+      },
+      projectEnvService: {
+        readWithMeta: vi.fn().mockResolvedValue({ env: { KEY: 'val' }, name: 'my-proj' }),
+        write,
+      },
+      renderDelete: vi.fn().mockResolvedValue({ name: 'my-proj', env: { KEY: 'val' }, source: 'project' }),
+    })
+
+    await deletePreset()
+
+    expect(write).toHaveBeenCalledWith({})
+    expect(remove).not.toHaveBeenCalled()
+    expect(logSpy).toHaveBeenCalledWith('Deleted preset: my-proj')
+  })
+
+  it('prints message when no presets exist', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined)
+    const deletePreset = createDeletePresetCommand({
+      presetService: {
+        listNames: vi.fn().mockResolvedValue([]),
+        read: vi.fn(),
+        remove,
+      },
+      projectEnvService: {
+        readWithMeta: vi.fn().mockResolvedValue({ env: {} }),
+        write: vi.fn(),
+      },
+      renderDelete: vi.fn(),
+    })
+
+    await deletePreset()
+
+    expect(logSpy).toHaveBeenCalledWith('No presets found.')
+    expect(remove).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when user cancels', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined)
+    const deletePreset = createDeletePresetCommand({
+      presetService: {
+        listNames: vi.fn().mockResolvedValue(['openai']),
+        read: vi.fn().mockResolvedValue({ env: { API_KEY: 'test' } }),
+        remove,
+      },
+      projectEnvService: {
+        readWithMeta: vi.fn().mockResolvedValue({ env: {} }),
+        write: vi.fn(),
+      },
+      renderDelete: vi.fn().mockResolvedValue(undefined),
+    })
+
+    await deletePreset()
+
+    expect(remove).not.toHaveBeenCalled()
   })
 })
 
