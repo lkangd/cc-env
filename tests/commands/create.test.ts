@@ -4,24 +4,8 @@ import { join } from 'node:path'
 
 import { describe, expect, it, vi, afterEach } from 'vitest'
 
-import { createPresetCreateCommand } from '../../src/commands/preset/create.js'
+import { createPresetCreateCommand, readEnvFile } from '../../src/commands/preset/create.js'
 import { CliError } from '../../src/core/errors.js'
-import { toProcessEnvMap } from '../../src/core/process-env.js'
-
-describe('toProcessEnvMap', () => {
-  it('filters process.env-like input to string values only', () => {
-    expect(
-      toProcessEnvMap({
-        ANTHROPIC_BASE_URL: 'https://api.openai.com',
-        EMPTY: undefined,
-        PORT: 3000,
-        ENABLED: true,
-      }),
-    ).toEqual({
-      ANTHROPIC_BASE_URL: 'https://api.openai.com',
-    })
-  })
-})
 
 const tempRoots: string[] = []
 
@@ -35,15 +19,88 @@ afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
+describe('readEnvFile', () => {
+  it('reads a flat JSON file', async () => {
+    const root = await createTempRoot()
+    const file = join(root, 'env.json')
+    await writeFile(file, JSON.stringify({ API_KEY: 'secret', PORT: '3000' }))
+
+    const result = await readEnvFile(file)
+    expect(result.allKeys).toEqual(['API_KEY', 'PORT'])
+    expect(result.env).toEqual({ API_KEY: 'secret', PORT: '3000' })
+  })
+
+  it('extracts from nested env field in JSON', async () => {
+    const root = await createTempRoot()
+    const file = join(root, 'env.json')
+    await writeFile(file, JSON.stringify({ env: { API_KEY: 'secret' }, other: true }))
+
+    const result = await readEnvFile(file)
+    expect(result.allKeys).toEqual(['API_KEY'])
+    expect(result.env).toEqual({ API_KEY: 'secret' })
+  })
+
+  it('falls back to top-level when env is not an object', async () => {
+    const root = await createTempRoot()
+    const file = join(root, 'env.json')
+    await writeFile(file, JSON.stringify({ env: 'not-an-object', API_KEY: 'secret' }))
+
+    const result = await readEnvFile(file)
+    expect(result.env).toEqual({ API_KEY: 'secret' })
+  })
+
+  it('reads a YAML file', async () => {
+    const root = await createTempRoot()
+    const file = join(root, 'env.yaml')
+    await writeFile(file, 'API_KEY: secret\nPORT: "3000"\n')
+
+    const result = await readEnvFile(file)
+    expect(result.allKeys).toEqual(['API_KEY', 'PORT'])
+    expect(result.env).toEqual({ API_KEY: 'secret', PORT: '3000' })
+  })
+
+  it('throws for unsupported file extensions', async () => {
+    const root = await createTempRoot()
+    const file = join(root, 'env.toml')
+    await writeFile(file, 'content')
+
+    await expect(readEnvFile(file)).rejects.toThrowError(
+      new CliError('Unsupported file format: .toml', 2),
+    )
+  })
+
+  it('throws CliError for unreadable files', async () => {
+    await expect(readEnvFile('/nonexistent/file.json')).rejects.toThrowError(
+      expect.any(CliError),
+    )
+  })
+
+  it('throws CliError for invalid JSON content', async () => {
+    const root = await createTempRoot()
+    const file = join(root, 'env.json')
+    await writeFile(file, '{invalid')
+
+    await expect(readEnvFile(file)).rejects.toThrowError(
+      expect.any(CliError),
+    )
+  })
+})
+
 describe('createPresetCreateCommand', () => {
-  it('creates a preset from inline KEY=VALUE pairs', async () => {
+  it('writes to presetService when destination is global', async () => {
     const presetService = {
       write: vi.fn().mockResolvedValue(undefined),
     }
     const projectEnvService = {
       write: vi.fn().mockResolvedValue(undefined),
     }
-    const renderFlow = vi.fn()
+    const renderFlow = vi.fn().mockResolvedValue({
+      source: 'manual',
+      env: { API_KEY: 'secret' },
+      selectedKeys: ['API_KEY'],
+      presetName: 'my-preset',
+      destination: 'global',
+    })
 
     const createPreset = createPresetCreateCommand({
       presetService,
@@ -51,72 +108,46 @@ describe('createPresetCreateCommand', () => {
       renderFlow,
     })
 
-    await createPreset({
-      name: 'openai',
-      pairs: ['ANTHROPIC_BASE_URL=https://api.openai.com'],
-    })
+    await createPreset()
 
     expect(presetService.write).toHaveBeenCalledWith({
-      name: 'openai',
+      name: 'my-preset',
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
-      env: {
-        ANTHROPIC_BASE_URL: 'https://api.openai.com',
-      },
+      env: { API_KEY: 'secret' },
     })
     expect(projectEnvService.write).not.toHaveBeenCalled()
-    expect(renderFlow).not.toHaveBeenCalled()
   })
 
-  it('throws a CliError for invalid inline env pairs', async () => {
-    const createPreset = createPresetCreateCommand({
-      presetService: { write: vi.fn().mockResolvedValue(undefined) },
-      projectEnvService: { write: vi.fn().mockResolvedValue(undefined) },
-      renderFlow: vi.fn(),
+  it('writes to projectEnvService when destination is project', async () => {
+    const presetService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const projectEnvService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const renderFlow = vi.fn().mockResolvedValue({
+      source: 'file',
+      filePath: '/path/to/env.json',
+      env: { API_KEY: 'secret', OTHER: 'value' },
+      selectedKeys: ['API_KEY'],
+      presetName: 'proj',
+      destination: 'project',
     })
 
-    await expect(
-      createPreset({
-        name: 'openai',
-        pairs: ['ANTHROPIC_BASE_URL'],
-      }),
-    ).rejects.toThrowError(new CliError('Invalid env pair: ANTHROPIC_BASE_URL', 2))
-  })
-
-  it('throws a CliError when preset target is missing a name', async () => {
     const createPreset = createPresetCreateCommand({
-      presetService: { write: vi.fn().mockResolvedValue(undefined) },
-      projectEnvService: { write: vi.fn().mockResolvedValue(undefined) },
-      renderFlow: vi.fn(),
+      presetService,
+      projectEnvService,
+      renderFlow,
     })
 
-    await expect(
-      createPreset({
-        pairs: ['ANTHROPIC_BASE_URL=https://api.openai.com'],
-      }),
-    ).rejects.toThrowError(new CliError('Preset name is required', 2))
+    await createPreset()
+
+    expect(projectEnvService.write).toHaveBeenCalledWith({ API_KEY: 'secret' })
+    expect(presetService.write).not.toHaveBeenCalled()
   })
 
-  it('wraps invalid file input in a CliError', async () => {
-    const root = await createTempRoot()
-    const file = join(root, 'env.json')
-    await writeFile(file, '{invalid', 'utf8')
-
-    const createPreset = createPresetCreateCommand({
-      presetService: { write: vi.fn().mockResolvedValue(undefined) },
-      projectEnvService: { write: vi.fn().mockResolvedValue(undefined) },
-      renderFlow: vi.fn(),
-    })
-
-    await expect(
-      createPreset({
-        name: 'openai',
-        file,
-      }),
-    ).rejects.toThrowError(new CliError(`Failed to read env file: ${file}`, 2))
-  })
-
-  it('calls interactive fallback with context when no file or pairs are provided', async () => {
+  it('does nothing when renderFlow returns undefined', async () => {
     const presetService = {
       write: vi.fn().mockResolvedValue(undefined),
     }
@@ -131,22 +162,13 @@ describe('createPresetCreateCommand', () => {
       renderFlow,
     })
 
-    await createPreset({
-      name: 'openai',
-      project: true,
-    })
+    await createPreset()
 
-    expect(renderFlow).toHaveBeenCalledWith({
-      name: 'openai',
-      file: undefined,
-      pairs: [],
-      project: true,
-    })
     expect(presetService.write).not.toHaveBeenCalled()
     expect(projectEnvService.write).not.toHaveBeenCalled()
   })
 
-  it('uses the provided preset name for interactive preset writes', async () => {
+  it('only includes selected keys in the written env', async () => {
     const presetService = {
       write: vi.fn().mockResolvedValue(undefined),
     }
@@ -154,9 +176,12 @@ describe('createPresetCreateCommand', () => {
       write: vi.fn().mockResolvedValue(undefined),
     }
     const renderFlow = vi.fn().mockResolvedValue({
-      destination: 'preset',
-      selectedSources: ['process'],
-      selectedKeys: ['UNRELATED_KEY'],
+      source: 'file',
+      filePath: '/env.json',
+      env: { A: '1', B: '2', C: '3' },
+      selectedKeys: ['A', 'C'],
+      presetName: 'partial',
+      destination: 'global',
     })
 
     const createPreset = createPresetCreateCommand({
@@ -165,73 +190,13 @@ describe('createPresetCreateCommand', () => {
       renderFlow,
     })
 
-    await createPreset({
-      name: 'custom',
-    })
+    await createPreset()
 
     expect(presetService.write).toHaveBeenCalledWith({
-      name: 'custom',
+      name: 'partial',
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
-      env: {},
+      env: { A: '1', C: '3' },
     })
-    expect(projectEnvService.write).not.toHaveBeenCalled()
-  })
-
-  it("falls back to 'openai' for interactive preset writes without a name", async () => {
-    const presetService = {
-      write: vi.fn().mockResolvedValue(undefined),
-    }
-    const projectEnvService = {
-      write: vi.fn().mockResolvedValue(undefined),
-    }
-    const renderFlow = vi.fn().mockResolvedValue({
-      destination: 'preset',
-      selectedSources: ['process'],
-      selectedKeys: ['UNRELATED_KEY'],
-    })
-
-    const createPreset = createPresetCreateCommand({
-      presetService,
-      projectEnvService,
-      renderFlow,
-    })
-
-    await createPreset({})
-
-    expect(presetService.write).toHaveBeenCalledWith({
-      name: 'openai',
-      createdAt: expect.any(String),
-      updatedAt: expect.any(String),
-      env: {},
-    })
-    expect(projectEnvService.write).not.toHaveBeenCalled()
-  })
-
-  it('preserves placeholder project writes when interactive flow selects ANTHROPIC_BASE_URL', async () => {
-    const presetService = {
-      write: vi.fn().mockResolvedValue(undefined),
-    }
-    const projectEnvService = {
-      write: vi.fn().mockResolvedValue(undefined),
-    }
-    const renderFlow = vi.fn().mockResolvedValue({
-      destination: 'project',
-      selectedSources: ['process'],
-      selectedKeys: ['ANTHROPIC_BASE_URL'],
-    })
-
-    const createPreset = createPresetCreateCommand({
-      presetService,
-      projectEnvService,
-      renderFlow,
-    })
-
-    await createPreset({})
-
-    expect(projectEnvService.write).toHaveBeenCalledWith({
-      ANTHROPIC_BASE_URL: 'https://api.openai.com',
-    })
-    expect(presetService.write).not.toHaveBeenCalled()
   })
 })
