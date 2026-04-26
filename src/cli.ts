@@ -1,6 +1,8 @@
 import React from 'react'
 import { render } from 'ink'
 import { join } from 'node:path'
+import figlet from 'figlet'
+import gradient from 'gradient-string'
 
 import { Command } from 'commander'
 
@@ -262,6 +264,17 @@ presetCommand.command('create [pairs...]')
       project: options.project,
     }),
   )
+
+function printBanner() {
+  const banner = figlet.textSync('CC ENV', { font: 'ANSI Shadow' })
+  const line = '─'.repeat(48)
+  const styled = gradient(['#00d2ff', '#7b2ff7', '#ff0080'])(banner)
+  process.stderr.write(`\n${styled}\x1b[2m\n${line}\x1b[0m\n\n`)
+}
+
+program.hook('preAction', () => {
+  printBanner()
+})
 
 program.command('debug').action(
   createDebugCommand({
