@@ -7,103 +7,175 @@ import {
 } from '../../src/flows/preset-create-flow.js'
 
 describe('preset create flow', () => {
-  function createCompleteFlowState(): PresetCreateFlowState {
-    return advancePresetCreateFlow(
-      advancePresetCreateFlow(
-        advancePresetCreateFlow(createPresetCreateFlowState(), {
-          type: 'select-source',
-          source: 'process',
-        }),
-        {
-          type: 'select-keys',
-          keys: ['ANTHROPIC_BASE_URL'],
-        },
-      ),
-      {
-        type: 'select-destination',
-        destination: 'preset',
-      },
-    )
-  }
-
-  it("createPresetCreateFlowState() starts at step 'source'", () => {
+  it("starts at step 'source' with empty defaults", () => {
     expect(createPresetCreateFlowState()).toEqual({
       step: 'source',
-      selectedSources: [],
+      env: {},
+      allKeys: [],
       selectedKeys: [],
+      presetName: '',
     })
   })
 
-  it('moves from source to keys and records selectedSources', () => {
-    const state = createPresetCreateFlowState()
-
-    expect(
-      advancePresetCreateFlow(state, {
+  describe('file path', () => {
+    function goToFilePath(): PresetCreateFlowState {
+      return advancePresetCreateFlow(createPresetCreateFlowState(), {
         type: 'select-source',
-        source: 'process',
-      }),
-    ).toEqual({
-      step: 'keys',
-      selectedSources: ['process'],
-      selectedKeys: [],
+        source: 'file',
+      })
+    }
+
+    it('source=file advances to filePath', () => {
+      expect(goToFilePath().step).toBe('filePath')
+    })
+
+    it('set-file-path advances to keys', () => {
+      const state = advancePresetCreateFlow(goToFilePath(), {
+        type: 'set-file-path',
+        filePath: '/path/to/env.json',
+      })
+      expect(state.step).toBe('keys')
+      expect(state.filePath).toBe('/path/to/env.json')
+    })
+
+    it('set-error stays on filePath with error message', () => {
+      const state = advancePresetCreateFlow(goToFilePath(), {
+        type: 'set-error',
+        error: 'File not found',
+      })
+      expect(state.step).toBe('filePath')
+      expect(state.error).toBe('File not found')
     })
   })
 
-  it('moves from keys to destination and records selectedKeys', () => {
-    const sourceState = advancePresetCreateFlow(createPresetCreateFlowState(), {
-      type: 'select-source',
-      source: 'process',
-    })
-
-    expect(
-      advancePresetCreateFlow(sourceState, {
-        type: 'select-keys',
-        keys: ['ANTHROPIC_BASE_URL'],
-      }),
-    ).toEqual({
-      step: 'destination',
-      selectedSources: ['process'],
-      selectedKeys: ['ANTHROPIC_BASE_URL'],
-    })
-  })
-
-  it('moves from destination to confirm and records destination', () => {
-    const keysState = advancePresetCreateFlow(
-      advancePresetCreateFlow(createPresetCreateFlowState(), {
+  describe('manual input path', () => {
+    function goToManualInput(): PresetCreateFlowState {
+      return advancePresetCreateFlow(createPresetCreateFlowState(), {
         type: 'select-source',
-        source: 'process',
-      }),
-      {
-        type: 'select-keys',
-        keys: ['ANTHROPIC_BASE_URL'],
-      },
-    )
+        source: 'manual',
+      })
+    }
 
-    expect(
-      advancePresetCreateFlow(keysState, {
+    it('source=manual advances to manualInput', () => {
+      expect(goToManualInput().step).toBe('manualInput')
+    })
+
+    it('add-manual-pair accumulates pairs', () => {
+      const state = advancePresetCreateFlow(goToManualInput(), {
+        type: 'add-manual-pair',
+        key: 'FOO',
+        value: 'bar',
+      })
+      expect(state.env).toEqual({ FOO: 'bar' })
+      expect(state.selectedKeys).toEqual(['FOO'])
+      expect(state.step).toBe('manualInput')
+    })
+
+    it('add-manual-pair overwrites existing key', () => {
+      const first = advancePresetCreateFlow(goToManualInput(), {
+        type: 'add-manual-pair',
+        key: 'FOO',
+        value: 'bar',
+      })
+      const second = advancePresetCreateFlow(first, {
+        type: 'add-manual-pair',
+        key: 'FOO',
+        value: 'updated',
+      })
+      expect(second.env.FOO).toBe('updated')
+      expect(second.selectedKeys).toEqual(['FOO'])
+    })
+
+    it('set-error on manualInput sets error', () => {
+      const state = advancePresetCreateFlow(goToManualInput(), {
+        type: 'set-error',
+        error: 'Invalid format',
+      })
+      expect(state.error).toBe('Invalid format')
+    })
+
+    it('finish-manual-input advances to name', () => {
+      const state = advancePresetCreateFlow(goToManualInput(), {
+        type: 'finish-manual-input',
+      })
+      expect(state.step).toBe('name')
+    })
+  })
+
+  describe('shared path after source input', () => {
+    function goToNameViaFile(): PresetCreateFlowState {
+      const filePath = advancePresetCreateFlow(createPresetCreateFlowState(), {
+        type: 'select-source',
+        source: 'file',
+      })
+      const keys = advancePresetCreateFlow(filePath, {
+        type: 'set-file-path',
+        filePath: '/env.json',
+      })
+      return advancePresetCreateFlow(keys, {
+        type: 'select-keys',
+        keys: ['API_KEY'],
+        env: { API_KEY: 'secret' },
+      })
+    }
+
+    function goToNameViaManual(): PresetCreateFlowState {
+      const manual = advancePresetCreateFlow(createPresetCreateFlowState(), {
+        type: 'select-source',
+        source: 'manual',
+      })
+      return advancePresetCreateFlow(manual, {
+        type: 'finish-manual-input',
+      })
+    }
+
+    it('set-name advances to destination', () => {
+      const state = advancePresetCreateFlow(goToNameViaFile(), {
+        type: 'set-name',
+        name: 'my-preset',
+      })
+      expect(state.step).toBe('destination')
+      expect(state.presetName).toBe('my-preset')
+    })
+
+    it('select-destination advances to confirm', () => {
+      const name = advancePresetCreateFlow(goToNameViaFile(), {
+        type: 'set-name',
+        name: 'my-preset',
+      })
+      const dest = advancePresetCreateFlow(name, {
+        type: 'select-destination',
+        destination: 'global',
+      })
+      expect(dest.step).toBe('confirm')
+      expect(dest.destination).toBe('global')
+    })
+
+    it('confirm advances to done', () => {
+      const name = advancePresetCreateFlow(goToNameViaFile(), {
+        type: 'set-name',
+        name: 'my-preset',
+      })
+      const dest = advancePresetCreateFlow(name, {
         type: 'select-destination',
         destination: 'project',
-      }),
-    ).toEqual({
-      step: 'confirm',
-      selectedSources: ['process'],
-      selectedKeys: ['ANTHROPIC_BASE_URL'],
-      destination: 'project',
+      })
+      const done = advancePresetCreateFlow(dest, { type: 'confirm' })
+      expect(done.step).toBe('done')
     })
-  })
 
-  it('moves from confirm to done on confirm', () => {
-    const confirmState = createCompleteFlowState()
-
-    expect(
-      advancePresetCreateFlow(confirmState, {
-        type: 'confirm',
-      }),
-    ).toEqual({
-      step: 'done',
-      selectedSources: ['process'],
-      selectedKeys: ['ANTHROPIC_BASE_URL'],
-      destination: 'preset',
+    it('manual path reaches done through name→destination→confirm', () => {
+      const name = advancePresetCreateFlow(goToNameViaManual(), {
+        type: 'set-name',
+        name: 'manual-preset',
+      })
+      const dest = advancePresetCreateFlow(name, {
+        type: 'select-destination',
+        destination: 'global',
+      })
+      const done = advancePresetCreateFlow(dest, { type: 'confirm' })
+      expect(done.step).toBe('done')
+      expect(done.presetName).toBe('manual-preset')
     })
   })
 
@@ -113,14 +185,8 @@ describe('preset create flow', () => {
     expect(
       advancePresetCreateFlow(state, {
         type: 'select-keys',
-        keys: ['ANTHROPIC_BASE_URL'],
-      }),
-    ).toEqual(state)
-
-    expect(
-      advancePresetCreateFlow(state, {
-        type: 'select-destination',
-        destination: 'project',
+        keys: ['FOO'],
+        env: { FOO: 'bar' },
       }),
     ).toEqual(state)
 
@@ -131,30 +197,29 @@ describe('preset create flow', () => {
     ).toEqual(state)
   })
 
-  it('ignores select-source after leaving the source step', () => {
-    const keysState = advancePresetCreateFlow(createPresetCreateFlowState(), {
-      type: 'select-source',
-      source: 'process',
-    })
-
-    expect(
-      advancePresetCreateFlow(keysState, {
-        type: 'select-source',
-        source: 'process',
-      }),
-    ).toEqual(keysState)
-  })
-
   it('ignores changes after the flow is done', () => {
-    const doneState = advancePresetCreateFlow(createCompleteFlowState(), {
-      type: 'confirm',
+    const source = advancePresetCreateFlow(createPresetCreateFlowState(), {
+      type: 'select-source',
+      source: 'manual',
     })
+    const name = advancePresetCreateFlow(source, {
+      type: 'finish-manual-input',
+    })
+    const dest = advancePresetCreateFlow(name, {
+      type: 'set-name',
+      name: 'test',
+    })
+    const confirm = advancePresetCreateFlow(dest, {
+      type: 'select-destination',
+      destination: 'global',
+    })
+    const done = advancePresetCreateFlow(confirm, { type: 'confirm' })
 
     expect(
-      advancePresetCreateFlow(doneState, {
+      advancePresetCreateFlow(done, {
         type: 'select-source',
-        source: 'settings',
+        source: 'file',
       }),
-    ).toEqual(doneState)
+    ).toEqual(done)
   })
 })
