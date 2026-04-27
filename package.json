@@ -1,5 +1,5 @@
 {
-  "name": "cc-env",
+  "name": "@lkangd/cc-env",
   "version": "1.0.0",
   "description": "",
   "homepage": "https://github.com/lkangd/cc-env#readme",
@@ -12,6 +12,9 @@
   },
   "license": "ISC",
   "author": "",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "engines": {
     "node": ">=20.19.2 <21"
