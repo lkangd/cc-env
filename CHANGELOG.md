@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 (2026-04-27)
+
+### Code Refactoring
+* flatten preset subcommands to top-level CLI commands
+
 ## 1.1.0 (2026-04-27)
 
 ### Features
