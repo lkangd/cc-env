@@ -1,15 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { renderEnvSummary } from '../../src/ink/summary.js'
 
-import { createDebugCommand } from '../../src/commands/debug.js'
 import { createDeletePresetCommand } from '../../src/commands/preset/delete.js'
 import { formatEnvBlock, formatRestorePreview } from '../../src/core/format.js'
 
 const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-vi.mock('../../src/ink/summary.js', () => ({
-  renderEnvSummary: vi.fn().mockResolvedValue(undefined),
-}))
 
 afterEach(() => {
   logSpy.mockClear()
@@ -121,41 +115,5 @@ describe('createDeletePresetCommand', () => {
     await deletePreset()
 
     expect(remove).not.toHaveBeenCalled()
-  })
-})
-
-describe('createDebugCommand', () => {
-  it('prints merged env containing BASE_URL', async () => {
-    const debug = createDebugCommand({
-      settingsEnvService: {
-        read: vi.fn().mockResolvedValue({
-          OPENAI_API_KEY: 'sk-settings',
-        }),
-      },
-      projectEnvService: {
-        read: vi.fn().mockResolvedValue({
-          BASE_URL: 'https://api.openai.com',
-        }),
-      },
-      runtimeEnvService: {
-        merge: vi.fn().mockReturnValue({
-          OPENAI_API_KEY: 'sk-settings',
-          BASE_URL: 'https://api.openai.com',
-        }),
-      },
-      processEnv: {},
-      presetEnv: {},
-    })
-
-    await debug()
-
-    expect(renderEnvSummary).toHaveBeenCalledWith({
-      title: 'Merged Environment',
-      description: 'Final env after merging: process + settings + project + preset',
-      env: {
-        OPENAI_API_KEY: 'sk-settings',
-        BASE_URL: 'https://api.openai.com',
-      },
-    })
   })
 })

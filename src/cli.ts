@@ -8,7 +8,6 @@ import { Command } from 'commander'
 
 const h = React.createElement
 
-import { createDebugCommand } from './commands/debug.js'
 import { createInitCommand } from './commands/init.js'
 import { createPresetCreateCommand } from './commands/preset/create.js'
 import { createDeletePresetCommand } from './commands/preset/delete.js'
@@ -22,12 +21,8 @@ import { renderEnvSummary } from './ink/summary.js'
 import { PresetCreateApp } from './ink/preset-create-app.js'
 import { PresetShowApp } from './ink/preset-show-app.js'
 import { RunPresetSelectApp } from './ink/run-preset-select-app.js'
-import {
-  advanceRestoreFlow,
-  createRestoreFlowState,
-} from './flows/restore-flow.js'
+import { advanceRestoreFlow, createRestoreFlowState } from './flows/restore-flow.js'
 import { RestoreApp } from './ink/restore-app.js'
-import { toProcessEnvMap } from './core/process-env.js'
 import { CliError } from './core/errors.js'
 import { resolveGlobalRoot } from './core/paths.js'
 import { spawnCommand } from './core/spawn.js'
@@ -36,7 +31,6 @@ import { createHistoryService } from './services/history-service.js'
 import { createPresetService } from './services/preset-service.js'
 import { createProjectEnvService } from './services/project-env-service.js'
 import { createProjectStateService } from './services/project-state-service.js'
-import { createRuntimeEnvService } from './services/runtime-env-service.js'
 import { createSettingsEnvService } from './services/settings-env-service.js'
 import { createShellEnvService } from './services/shell-env-service.js'
 
@@ -53,14 +47,10 @@ const claudeSettingsEnvService = createClaudeSettingsEnvService({ homeDir, cwd }
 const settingsEnvService = createSettingsEnvService({ settingsPath })
 const shellEnvService = createShellEnvService({ homeDir })
 const projectEnvService = createProjectEnvService({ cwd })
-const runtimeEnvService = createRuntimeEnvService()
 const presetService = createPresetService(globalRoot)
 const historyService = createHistoryService(globalRoot)
 
-async function runRestoreFlow(context: {
-  records: Awaited<ReturnType<typeof historyService.list>>
-  yes: boolean
-}) {
+async function runRestoreFlow(context: { records: Awaited<ReturnType<typeof historyService.list>>; yes: boolean }) {
   const state = createRestoreFlowState(context.records)
   const firstRecord = context.records[0]
 
@@ -72,7 +62,7 @@ async function runRestoreFlow(context: {
   if (context.yes) {
     const selectedRecordState = advanceRestoreFlow(state, {
       type: 'select-record',
-      timestamp: firstRecord.timestamp,
+      timestamp: firstRecord.timestamp
     })
 
     if (firstRecord.action === 'init') {
@@ -83,14 +73,14 @@ async function runRestoreFlow(context: {
 
       return {
         confirmed: true,
-        timestamp: firstRecord.timestamp,
+        timestamp: firstRecord.timestamp
       }
     }
 
     const confirmState = advanceRestoreFlow(selectedRecordState, {
       type: 'select-target',
       targetType: firstRecord.targetType,
-      ...(firstRecord.targetType === 'preset' ? { targetName: firstRecord.targetName } : {}),
+      ...(firstRecord.targetType === 'preset' ? { targetName: firstRecord.targetName } : {})
     })
 
     const doneState = advanceRestoreFlow(confirmState, { type: 'confirm' })
@@ -100,7 +90,7 @@ async function runRestoreFlow(context: {
         confirmed: true,
         timestamp: doneState.selectedTimestamp,
         targetType: doneState.targetType,
-        targetName: doneState.targetName,
+        targetName: doneState.targetName
       }
     }
 
@@ -108,7 +98,7 @@ async function runRestoreFlow(context: {
       return {
         confirmed: true,
         timestamp: doneState.selectedTimestamp,
-        targetType: doneState.targetType,
+        targetType: doneState.targetType
       }
     }
 
@@ -127,10 +117,10 @@ async function runRestoreFlow(context: {
   const app = render(
     h(RestoreApp, {
       state,
-      onSubmit: (value) => {
+      onSubmit: value => {
         result = value
-      },
-    }),
+      }
+    })
   )
 
   await app.waitUntilExit()
@@ -138,14 +128,15 @@ async function runRestoreFlow(context: {
 }
 
 program.exitOverride().configureOutput({
-  writeErr: (str) => {
+  writeErr: str => {
     if (!str.startsWith('error:')) {
       process.stderr.write(str)
     }
-  },
+  }
 })
 
-program.command('run [args...]')
+program
+  .command('run [args...]')
   .allowUnknownOption(true)
   .description('Run claude with merged environment variables')
   .option('--dry-run', 'Preview the merged env without executing')
@@ -158,13 +149,6 @@ program.command('run [args...]')
       presetService,
       projectEnvService,
       projectStateService: createProjectStateService(globalRoot),
-      runtimeEnvService,
-      envSources: async ({ presetEnv }) => ({
-        processEnv: toProcessEnvMap(process.env),
-        settingsEnv: await settingsEnvService.read(),
-        projectEnv: await projectEnvService.read(),
-        presetEnv,
-      }),
       findClaude: findClaudeExecutable,
       renderPresetSelect: async ({ presets, defaultIndex }) => {
         let result: (typeof presets)[number] | undefined
@@ -172,37 +156,38 @@ program.command('run [args...]')
           h(RunPresetSelectApp, {
             presets,
             defaultIndex,
-            onSubmit: (preset) => {
+            onSubmit: preset => {
               result = preset
-            },
-          }),
+            }
+          })
         )
         await app.waitUntilExit()
         return result
       },
-      spawnCommand,
+      spawnCommand
     })({
       args: rawArgs,
       dryRun: options.dryRun ?? false,
       yes: options.yes ?? false,
-      cwd,
+      cwd
     })
   })
 
-program.command('init')
+program
+  .command('init')
   .description('Initialize cc-env for the current project')
   .option('-y, --yes', 'Accept all defaults without interactive prompts')
-  .action((options) =>
+  .action(options =>
     createInitCommand({
       claudeSettingsEnvService,
       shellEnvService,
       historyService,
       renderEnvSummary,
-      renderFlow: async (context) => {
+      renderFlow: async context => {
         if (context.yes) {
           return {
             selectedKeys: context.requiredKeys,
-            confirmed: true,
+            confirmed: true
           }
         }
 
@@ -216,24 +201,25 @@ program.command('init')
         const app = render(
           h(InitApp, {
             ...context,
-            onSubmit: (value) => {
+            onSubmit: value => {
               result = value
-            },
-          }),
+            }
+          })
         )
 
         await app.waitUntilExit()
         return result
-      },
+      }
     })({
-      yes: options.yes,
-    }),
+      yes: options.yes
+    })
   )
 
-program.command('restore')
+program
+  .command('restore')
   .description('Restore environment variables from a previous snapshot')
   .option('-y, --yes', 'Accept all defaults without interactive prompts')
-  .action((options) =>
+  .action(options =>
     createRestoreCommand({
       historyService,
       claudeSettingsEnvService,
@@ -241,72 +227,77 @@ program.command('restore')
       settingsEnvService,
       presetService,
       renderEnvSummary: renderEnvSummary,
-      renderFlow: (context) => runRestoreFlow(context),
+      renderFlow: context => runRestoreFlow(context)
     })({
-      yes: options.yes,
-    }),
+      yes: options.yes
+    })
   )
 
 const presetCommand = program.command('preset').description('Manage environment presets')
-presetCommand.command('show').description('List and view all presets').action(
-  createShowPresetsCommand({
-    presetService,
-    projectEnvService,
-    renderShow: async (presets) => {
-      const app = render(h(PresetShowApp, { presets }))
-      await app.waitUntilExit()
-    },
-  }),
-)
-presetCommand.command('delete').description('Delete a saved preset').action(
-  createDeletePresetCommand({
-    presetService,
-    projectEnvService,
-    renderDelete: async (presets) => {
-      let result: (typeof presets)[number] | undefined
-      const app = render(
-        h(PresetDeleteApp, {
-          presets,
-          onSubmit: (preset) => {
-            result = preset
-          },
-        }),
-      )
-      await app.waitUntilExit()
-      return result
-    },
-  }),
-)
-presetCommand.command('create').description('Create a new environment preset')
+presetCommand
+  .command('show')
+  .description('List and view all presets')
+  .action(
+    createShowPresetsCommand({
+      presetService,
+      projectEnvService,
+      renderShow: async presets => {
+        const app = render(h(PresetShowApp, { presets }))
+        await app.waitUntilExit()
+      }
+    })
+  )
+presetCommand
+  .command('delete')
+  .description('Delete a saved preset')
+  .action(
+    createDeletePresetCommand({
+      presetService,
+      projectEnvService,
+      renderDelete: async presets => {
+        let result: (typeof presets)[number] | undefined
+        const app = render(
+          h(PresetDeleteApp, {
+            presets,
+            onSubmit: preset => {
+              result = preset
+            }
+          })
+        )
+        await app.waitUntilExit()
+        return result
+      }
+    })
+  )
+presetCommand
+  .command('create')
+  .description('Create a new environment preset')
   .action(() =>
     createPresetCreateCommand({
       presetService,
       projectEnvService,
       renderFlow: async () => {
-        let result: React.ComponentProps<typeof PresetCreateApp>['onSubmit'] extends (
-          result: infer TResult,
-        ) => unknown
+        let result: React.ComponentProps<typeof PresetCreateApp>['onSubmit'] extends (result: infer TResult) => unknown
           ? TResult | undefined
           : undefined
         const app = render(
           h(PresetCreateApp, {
-            onSubmit: (value) => {
+            onSubmit: value => {
               result = value
             },
-            readFile: async (filePath) => {
+            readFile: async filePath => {
               const { readEnvFile } = await import('./commands/preset/create.js')
               return readEnvFile(filePath)
             },
-            globalPresetPath: (name) => presetService.getPath(name),
-            projectEnvPath: join(cwd, '.cc-env', 'env.json'),
-          }),
+            globalPresetPath: name => presetService.getPath(name),
+            projectEnvPath: join(cwd, '.cc-env', 'env.json')
+          })
         )
 
         await app.waitUntilExit()
         return result
-      },
+      }
     })({ cwd })
-,
   )
 
 function printBanner() {
@@ -320,15 +311,6 @@ program.hook('preAction', () => {
   printBanner()
 })
 
-program.command('debug').description('Show current environment debug info').action(
-  createDebugCommand({
-    processEnv: process.env,
-    settingsEnvService,
-    projectEnvService,
-    runtimeEnvService,
-  }),
-)
-
 program.parseAsync(process.argv).catch((error: unknown) => {
   if (error instanceof CliError) {
     process.stderr.write(`\n  Error: ${error.message}\n\n`)
@@ -336,11 +318,7 @@ program.parseAsync(process.argv).catch((error: unknown) => {
     return
   }
 
-  if (
-    error &&
-    typeof error === 'object' &&
-    'code' in error
-  ) {
+  if (error && typeof error === 'object' && 'code' in error) {
     const { code, message } = error as { code?: string; message?: string }
 
     if (code === 'commander.helpDisplayed') {

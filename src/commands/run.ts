@@ -35,22 +35,6 @@ type ProjectStateService = {
   saveLastPreset: (cwd: string, ref: { presetName: string; source: 'global' | 'project' }) => Promise<void>
 }
 
-type RuntimeEnvService = {
-  merge: (input: {
-    processEnv: EnvMap
-    settingsEnv: EnvMap
-    projectEnv: EnvMap
-    presetEnv: EnvMap
-  }) => EnvMap
-}
-
-type EnvSources = (input: { presetEnv: EnvMap }) => Promise<{
-  processEnv: EnvMap
-  settingsEnv: EnvMap
-  projectEnv: EnvMap
-  presetEnv: EnvMap
-}>
-
 type FindClaude = () => string
 
 type RenderPresetSelect = (input: {
@@ -63,8 +47,6 @@ export function createRunCommand({
   presetService,
   projectEnvService,
   projectStateService,
-  runtimeEnvService,
-  envSources,
   findClaude,
   renderPresetSelect,
   spawnCommand,
@@ -74,8 +56,6 @@ export function createRunCommand({
   presetService: PresetService
   projectEnvService: ProjectEnvService
   projectStateService: ProjectStateService
-  runtimeEnvService: RuntimeEnvService
-  envSources: EnvSources
   findClaude: FindClaude
   renderPresetSelect: RenderPresetSelect
   spawnCommand: (command: string, args: string[], env: NodeJS.ProcessEnv) => Promise<void>
@@ -150,10 +130,7 @@ export function createRunCommand({
       source: selected.source,
     })
 
-    // Step 5: Merge env
-    const mergedEnv = runtimeEnvService.merge(await envSources({ presetEnv: selected.env }))
-
-    // Step 6: Resolve claude command
+    // Step 5: Resolve claude command
     let command: string
     let claudeArgs: string[]
     if (args.length > 0 && args[0] === 'claude') {
@@ -164,9 +141,9 @@ export function createRunCommand({
       claudeArgs = args
     }
 
-    // Step 7: Print env vars
+    // Step 6: Print env vars
     const presetKeys = new Set(Object.keys(selected.env))
-    const envBlock = formatRunEnvBlock(mergedEnv, presetKeys)
+    const envBlock = formatRunEnvBlock(selected.env, presetKeys)
     stdout.write(`Using preset: ${selected.name} (${selected.source})\n${envBlock}\n\n`)
 
     if (dryRun) {
@@ -175,7 +152,7 @@ export function createRunCommand({
       return
     }
 
-    // Step 8: Spawn
-    await spawnCommand(command, claudeArgs, { ...process.env, ...mergedEnv })
+    // Step 7: Spawn
+    await spawnCommand(command, claudeArgs, { ...process.env, ...selected.env })
   }
 }

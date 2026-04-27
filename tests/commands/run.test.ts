@@ -27,8 +27,6 @@ function createMocks(overrides: Partial<{
   presetService: { listNames: () => Promise<string[]>; read: (name: string) => Promise<{ env: EnvMap }> }
   projectEnvService: { readWithMeta: () => Promise<{ env: EnvMap; name?: string | undefined }> }
   projectStateService: { getLastPreset: (cwd: string) => Promise<PresetRef | undefined>; saveLastPreset: (cwd: string, ref: PresetRef) => Promise<void> }
-  runtimeEnvService: { merge: (input: { processEnv: EnvMap; settingsEnv: EnvMap; projectEnv: EnvMap; presetEnv: EnvMap }) => EnvMap }
-  envSources: (input: { presetEnv: EnvMap }) => Promise<{ processEnv: EnvMap; settingsEnv: EnvMap; projectEnv: EnvMap; presetEnv: EnvMap }>
   findClaude: () => string
   renderPresetSelect: (input: { presets: Array<PresetSelectItem>; defaultIndex: number }) => Promise<PresetSelectItem | undefined>
   spawnCommand: (command: string, args: string[], env: NodeJS.ProcessEnv) => Promise<void>
@@ -52,15 +50,6 @@ function createMocks(overrides: Partial<{
       getLastPreset: vi.fn().mockResolvedValue(undefined),
       saveLastPreset: vi.fn().mockResolvedValue(undefined),
     },
-    runtimeEnvService: overrides.runtimeEnvService ?? {
-      merge: vi.fn().mockReturnValue(defaultPreset.env),
-    },
-    envSources: overrides.envSources ?? vi.fn().mockResolvedValue({
-      processEnv: {},
-      settingsEnv: {},
-      projectEnv: {},
-      presetEnv: defaultPreset.env,
-    }),
     findClaude: overrides.findClaude ?? vi.fn().mockReturnValue('/usr/local/bin/claude'),
     renderPresetSelect: overrides.renderPresetSelect ?? vi.fn().mockResolvedValue(presetItem),
     spawnCommand: overrides.spawnCommand ?? vi.fn().mockResolvedValue(undefined),
@@ -74,8 +63,6 @@ function buildRun(mocks: ReturnType<typeof createMocks>) {
     presetService: mocks.presetService,
     projectEnvService: mocks.projectEnvService,
     projectStateService: mocks.projectStateService,
-    runtimeEnvService: mocks.runtimeEnvService,
-    envSources: mocks.envSources,
     findClaude: mocks.findClaude,
     renderPresetSelect: mocks.renderPresetSelect,
     spawnCommand: mocks.spawnCommand,
@@ -203,28 +190,6 @@ describe('createRunCommand', () => {
     )
     expect(mocks.stdout.write).toHaveBeenCalledWith(
       expect.stringContaining('OPENAI_API_KEY=sk-123456********'),
-    )
-  })
-
-  it('summarizes non-preset env vars with count', async () => {
-    const mocks = createMocks({
-      runtimeEnvService: {
-        merge: vi.fn().mockReturnValue({
-          OPENAI_API_KEY: 'sk-1234567890',
-          PATH: '/usr/bin',
-          HOME: '/home/user',
-          NODE_ENV: 'development',
-        } as Record<string, string>),
-      },
-    })
-
-    await buildRun(mocks)({ args: ['claude'], cwd: '/project' })
-
-    expect(mocks.stdout.write).toHaveBeenCalledWith(
-      expect.stringContaining('+3 other env vars applied'),
-    )
-    expect(mocks.stdout.write).not.toHaveBeenCalledWith(
-      expect.stringContaining('PATH='),
     )
   })
 

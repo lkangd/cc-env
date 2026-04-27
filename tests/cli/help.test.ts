@@ -76,7 +76,6 @@ describe('cc-env CLI help', () => {
     expect(stdout).toContain('init')
     expect(stdout).toContain('restore')
     expect(stdout).toContain('preset')
-    expect(stdout).toContain('debug')
   })
 
   it('shows the preset subcommands in help output', async () => {
@@ -104,8 +103,7 @@ describe('cc-env CLI help', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain('PROJECT_KEY=')
-    expect(result.stdout).toContain('other env vars applied')
-    expect(result.stdout).toContain('claude')
+    expect(result.stdout).toContain('Would run: claude')
   })
 
   it('prints CliError messages without stack traces at the top level', async () => {
