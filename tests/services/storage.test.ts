@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { atomicWriteFile } from '../../src/core/fs.js'
 import { CliError } from '../../src/core/errors.js'
 import type { HistoryRecord } from '../../src/core/schema.js'
-import { createConfigService } from '../../src/services/config-service.js'
 import { createHistoryService } from '../../src/services/history-service.js'
 import { createPresetService } from '../../src/services/preset-service.js'
 
@@ -35,17 +34,6 @@ describe('atomicWriteFile', () => {
 
     const entries = await readdir(dirname(filePath))
     expect(entries).toEqual(['config.json'])
-  })
-})
-
-describe('config service', () => {
-  it('reads and writes defaultPreset', async () => {
-    const globalRoot = await createTempRoot()
-    const service = createConfigService(globalRoot)
-
-    await service.write({ defaultPreset: 'openai' })
-
-    await expect(service.read()).resolves.toEqual({ defaultPreset: 'openai' })
   })
 })
 

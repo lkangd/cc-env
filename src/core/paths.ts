@@ -4,10 +4,6 @@ export function resolveGlobalRoot(globalRoot?: string): string {
   return globalRoot ?? join(process.env.HOME ?? process.cwd(), '.cc-env')
 }
 
-export function resolveConfigPath(globalRoot: string): string {
-  return join(globalRoot, 'config.json')
-}
-
 export function resolveClaudeSettingsPath(homeDir = process.env.HOME ?? process.cwd()): string {
   return join(homeDir, '.claude', 'settings.json')
 }

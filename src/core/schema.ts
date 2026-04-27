@@ -48,13 +48,8 @@ export const historySchema = z.discriminatedUnion('action', [
   restoreHistorySchema,
 ])
 
-export const configSchema = z.object({
-  defaultPreset: z.string().optional(),
-})
-
 export type EnvMap = z.infer<typeof envMapSchema>
 export type SourceEntry = z.infer<typeof sourceEntrySchema>
 export type Preset = z.infer<typeof presetSchema>
 export type InitHistoryRecord = z.infer<typeof initHistorySchema>
 export type HistoryRecord = z.infer<typeof historySchema>
-export type Config = z.infer<typeof configSchema>

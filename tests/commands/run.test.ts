@@ -19,17 +19,20 @@ const emptySettingsSources = [
   { path: '/project/.claude/settings.local.json', exists: false, env: {} as EnvMap },
 ]
 
+type PresetRef = { presetName: string; source: 'global' | 'project' }
+type PresetSelectItem = { name: string; env: EnvMap; source: 'global' | 'project' }
+
 function createMocks(overrides: Partial<{
   claudeSettingsEnvService: { read: () => Promise<typeof emptySettingsSources> }
   presetService: { listNames: () => Promise<string[]>; read: (name: string) => Promise<{ env: EnvMap }> }
-  projectEnvService: { readWithMeta: () => Promise<{ env: EnvMap; name?: string }> }
-  projectStateService: { getLastPreset: () => Promise<unknown>; saveLastPreset: () => Promise<void> }
-  runtimeEnvService: { merge: () => EnvMap }
-  envSources: () => Promise<Record<string, EnvMap>>
+  projectEnvService: { readWithMeta: () => Promise<{ env: EnvMap; name?: string | undefined }> }
+  projectStateService: { getLastPreset: (cwd: string) => Promise<PresetRef | undefined>; saveLastPreset: (cwd: string, ref: PresetRef) => Promise<void> }
+  runtimeEnvService: { merge: (input: { processEnv: EnvMap; settingsEnv: EnvMap; projectEnv: EnvMap; presetEnv: EnvMap }) => EnvMap }
+  envSources: (input: { presetEnv: EnvMap }) => Promise<{ processEnv: EnvMap; settingsEnv: EnvMap; projectEnv: EnvMap; presetEnv: EnvMap }>
   findClaude: () => string
-  renderPresetSelect: () => Promise<unknown>
-  spawnCommand: () => Promise<void>
-  stdout: { write: () => void }
+  renderPresetSelect: (input: { presets: Array<PresetSelectItem>; defaultIndex: number }) => Promise<PresetSelectItem | undefined>
+  spawnCommand: (command: string, args: string[], env: NodeJS.ProcessEnv) => Promise<void>
+  stdout: Pick<NodeJS.WriteStream, 'write'>
 }> = {}) {
   const defaultPreset = { env: { OPENAI_API_KEY: 'sk-1234567890' } as EnvMap }
   const presetItem = { name: 'openai', env: defaultPreset.env, source: 'global' as const }
@@ -90,7 +93,7 @@ describe('createRunCommand', () => {
     })
 
     await expect(buildRun(mocks)({ cwd: '/project' })).rejects.toEqual(
-      new CliError('Found init-managed keys in Claude settings: ANTHROPIC_AUTH_TOKEN. Run "cc-env init" first.'),
+      new CliError('Found init-managed keys in Claude settings:\n\n  ANTHROPIC_AUTH_TOKEN. \n\n  Run "cc-env init" first.'),
     )
   })
 
@@ -200,6 +203,28 @@ describe('createRunCommand', () => {
     )
     expect(mocks.stdout.write).toHaveBeenCalledWith(
       expect.stringContaining('OPENAI_API_KEY=sk-123456********'),
+    )
+  })
+
+  it('summarizes non-preset env vars with count', async () => {
+    const mocks = createMocks({
+      runtimeEnvService: {
+        merge: vi.fn().mockReturnValue({
+          OPENAI_API_KEY: 'sk-1234567890',
+          PATH: '/usr/bin',
+          HOME: '/home/user',
+          NODE_ENV: 'development',
+        } as Record<string, string>),
+      },
+    })
+
+    await buildRun(mocks)({ args: ['claude'], cwd: '/project' })
+
+    expect(mocks.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining('+3 other env vars applied'),
+    )
+    expect(mocks.stdout.write).not.toHaveBeenCalledWith(
+      expect.stringContaining('PATH='),
     )
   })
 

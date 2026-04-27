@@ -81,10 +81,10 @@ describe('Claude settings env service', () => {
     const sources = await service.read()
 
     expect(sources).toHaveLength(4)
-    expect(sources[0].exists).toBe(true)
-    expect(sources[1].exists).toBe(false)
-    expect(sources[2].exists).toBe(false)
-    expect(sources[3].exists).toBe(false)
+    expect(sources[0]!.exists).toBe(true)
+    expect(sources[1]!.exists).toBe(false)
+    expect(sources[2]!.exists).toBe(false)
+    expect(sources[3]!.exists).toBe(false)
   })
 
   it('preserves sibling fields when writing updated env values', async () => {
@@ -166,5 +166,18 @@ describe('shell env service', () => {
     await expect(readFile(join(homeDir, '.bashrc'), 'utf8')).resolves.toContain(
       'ANTHROPIC_BASE_URL',
     )
+  })
+
+  it('collapses blank lines when removing all keys', async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'cc-env-shell-'))
+    roots.push(homeDir)
+
+    const service = createShellEnvService({ homeDir })
+    const shellWrites = await service.write({ API_KEY: 'secret' })
+
+    await service.removeKeys(shellWrites, ['API_KEY'])
+
+    const content = await readFile(join(homeDir, '.zshrc'), 'utf8')
+    expect(content).not.toMatch(/\n{3,}/)
   })
 })

@@ -4,8 +4,6 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2022"],
-    "outDir": "dist",
-    "rootDir": "src",
     "strict": true,
     "noImplicitOverride": true,
     "noUncheckedIndexedAccess": true,
@@ -16,8 +14,9 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "jsx": "react-jsx",
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vitest/globals"],
+    "noEmit": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
   "exclude": ["dist", "node_modules"]
 }

@@ -104,21 +104,32 @@ describe('cc-env CLI help', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain('PROJECT_KEY=')
-    expect(result.stdout).toContain('SETTINGS_KEY=')
+    expect(result.stdout).toContain('other env vars applied')
     expect(result.stdout).toContain('claude')
   })
 
   it('prints CliError messages without stack traces at the top level', async () => {
+    const { homeDir, projectDir } = await createCliFixture()
+
+    await mkdir(join(projectDir, '.claude'), { recursive: true })
+    await writeFile(
+      join(projectDir, '.claude', 'settings.json'),
+      `${JSON.stringify({ env: { ANTHROPIC_AUTH_TOKEN: 'stale' } }, null, 2)}\n`,
+      'utf8',
+    )
+
     const result = await execa(
       'node',
       ['--import', tsxLoader, cliEntry, 'run', '--dry-run', '--yes'],
       {
-        cwd: repoRoot,
+        cwd: projectDir,
+        env: { HOME: homeDir },
         reject: false,
       },
     )
 
     expect(result.exitCode).toBe(1)
     expect(result.stderr).not.toContain('CliError:')
+    expect(result.stderr).toContain('Error:')
   })
 })

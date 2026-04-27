@@ -94,6 +94,7 @@ describe('createPresetCreateCommand', () => {
     const projectEnvService = {
       write: vi.fn().mockResolvedValue(undefined),
     }
+    const ensureGitignore = vi.fn().mockResolvedValue(undefined)
     const renderFlow = vi.fn().mockResolvedValue({
       source: 'manual',
       env: { API_KEY: 'secret' },
@@ -106,9 +107,10 @@ describe('createPresetCreateCommand', () => {
       presetService,
       projectEnvService,
       renderFlow,
+      ensureGitignore,
     })
 
-    await createPreset()
+    await createPreset({ cwd: '/project' })
 
     expect(presetService.write).toHaveBeenCalledWith({
       name: 'my-preset',
@@ -117,6 +119,7 @@ describe('createPresetCreateCommand', () => {
       env: { API_KEY: 'secret' },
     })
     expect(projectEnvService.write).not.toHaveBeenCalled()
+    expect(ensureGitignore).not.toHaveBeenCalled()
   })
 
   it('writes to projectEnvService when destination is project', async () => {
@@ -126,6 +129,7 @@ describe('createPresetCreateCommand', () => {
     const projectEnvService = {
       write: vi.fn().mockResolvedValue(undefined),
     }
+    const ensureGitignore = vi.fn().mockResolvedValue(undefined)
     const renderFlow = vi.fn().mockResolvedValue({
       source: 'file',
       filePath: '/path/to/env.json',
@@ -139,12 +143,69 @@ describe('createPresetCreateCommand', () => {
       presetService,
       projectEnvService,
       renderFlow,
+      ensureGitignore,
     })
 
-    await createPreset()
+    await createPreset({ cwd: '/project' })
 
     expect(projectEnvService.write).toHaveBeenCalledWith({ API_KEY: 'secret' }, { name: 'proj', createdAt: expect.any(String), updatedAt: expect.any(String) })
     expect(presetService.write).not.toHaveBeenCalled()
+  })
+
+  it('calls ensureGitignore when destination is project', async () => {
+    const presetService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const projectEnvService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const ensureGitignore = vi.fn().mockResolvedValue(undefined)
+    const renderFlow = vi.fn().mockResolvedValue({
+      source: 'manual',
+      env: { KEY: 'val' },
+      selectedKeys: ['KEY'],
+      presetName: 'test',
+      destination: 'project',
+    })
+
+    const createPreset = createPresetCreateCommand({
+      presetService,
+      projectEnvService,
+      renderFlow,
+      ensureGitignore,
+    })
+
+    await createPreset({ cwd: '/my-project' })
+
+    expect(ensureGitignore).toHaveBeenCalledWith('/my-project', '.cc-env')
+  })
+
+  it('does not call ensureGitignore when destination is global', async () => {
+    const presetService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const projectEnvService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const ensureGitignore = vi.fn().mockResolvedValue(undefined)
+    const renderFlow = vi.fn().mockResolvedValue({
+      source: 'manual',
+      env: { KEY: 'val' },
+      selectedKeys: ['KEY'],
+      presetName: 'test',
+      destination: 'global',
+    })
+
+    const createPreset = createPresetCreateCommand({
+      presetService,
+      projectEnvService,
+      renderFlow,
+      ensureGitignore,
+    })
+
+    await createPreset({ cwd: '/my-project' })
+
+    expect(ensureGitignore).not.toHaveBeenCalled()
   })
 
   it('does nothing when renderFlow returns undefined', async () => {
@@ -162,7 +223,7 @@ describe('createPresetCreateCommand', () => {
       renderFlow,
     })
 
-    await createPreset()
+    await createPreset({ cwd: '/project' })
 
     expect(presetService.write).not.toHaveBeenCalled()
     expect(projectEnvService.write).not.toHaveBeenCalled()
@@ -190,7 +251,7 @@ describe('createPresetCreateCommand', () => {
       renderFlow,
     })
 
-    await createPreset()
+    await createPreset({ cwd: '/project' })
 
     expect(presetService.write).toHaveBeenCalledWith({
       name: 'partial',

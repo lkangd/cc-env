@@ -54,7 +54,11 @@ function renderBlock(shell: ShellName, env: EnvMap): string {
 function replaceManagedBlock(content: string, block: string): string {
   const pattern = /# >>> cc-env >>>[\s\S]*?# <<< cc-env <<<\n?/
   if (pattern.test(content)) {
-    return content.replace(pattern, block)
+    const result = content.replace(pattern, block)
+    if (block === '') {
+      return result.replace(/\n{3,}/g, '\n\n').replace(/\n{2,}$/, '\n')
+    }
+    return result
   }
 
   return content.length === 0 ? block : `${content.replace(/\n?$/, '\n')}\n${block}`

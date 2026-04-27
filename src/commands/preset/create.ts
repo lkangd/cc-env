@@ -4,6 +4,7 @@ import { extname } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 
 import { CliError } from '../../core/errors.js'
+import { ensureGitignoreEntry } from '../../core/gitignore.js'
 import { type EnvMap } from '../../core/schema.js'
 import { toProcessEnvMap } from '../../core/process-env.js'
 import type { PresetCreateAppResult } from '../../ink/preset-create-app.js'
@@ -60,12 +61,14 @@ export function createPresetCreateCommand({
   presetService,
   projectEnvService,
   renderFlow,
+  ensureGitignore = (dir, entry) => ensureGitignoreEntry(dir, entry),
 }: {
   presetService: PresetService
   projectEnvService: ProjectEnvService
   renderFlow: () => Promise<PresetCreateAppResult | void>
+  ensureGitignore?: (dir: string, entry: string) => Promise<void>
 }) {
-  return async function createPreset(): Promise<void> {
+  return async function createPreset({ cwd }: { cwd: string }): Promise<void> {
     const result = await renderFlow()
 
     if (!result) return
@@ -79,6 +82,7 @@ export function createPresetCreateCommand({
 
     if (result.destination === 'project') {
       await projectEnvService.write(selectedEnv, { name: result.presetName, createdAt: timestamp, updatedAt: timestamp })
+      await ensureGitignore(cwd, '.cc-env')
       return
     }
 

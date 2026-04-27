@@ -1,5 +1,5 @@
 import { CliError } from '../core/errors.js'
-import { formatEnvBlock } from '../core/format.js'
+import { formatRunEnvBlock } from '../core/format.js'
 import type { EnvMap } from '../core/schema.js'
 
 const requiredInitKeys = [
@@ -101,7 +101,7 @@ export function createRunCommand({
     const staleKeys = requiredInitKeys.filter((k) => k in mergedSettingsEnv)
     if (staleKeys.length > 0) {
       throw new CliError(
-        `Found init-managed keys in Claude settings: ${staleKeys.join(', ')}. Run "cc-env init" first.`,
+        `Found init-managed keys in Claude settings:\n\n  ${staleKeys.join(', \n  ')}. \n\n  Run "cc-env init" first.`,
       )
     }
 
@@ -165,7 +165,8 @@ export function createRunCommand({
     }
 
     // Step 7: Print env vars
-    const envBlock = formatEnvBlock(mergedEnv)
+    const presetKeys = new Set(Object.keys(selected.env))
+    const envBlock = formatRunEnvBlock(mergedEnv, presetKeys)
     stdout.write(`Using preset: ${selected.name} (${selected.source})\n${envBlock}\n\n`)
 
     if (dryRun) {

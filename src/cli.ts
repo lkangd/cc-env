@@ -32,7 +32,6 @@ import { CliError } from './core/errors.js'
 import { resolveGlobalRoot } from './core/paths.js'
 import { spawnCommand } from './core/spawn.js'
 import { createClaudeSettingsEnvService } from './services/claude-settings-env-service.js'
-import { createConfigService } from './services/config-service.js'
 import { createHistoryService } from './services/history-service.js'
 import { createPresetService } from './services/preset-service.js'
 import { createProjectEnvService } from './services/project-env-service.js'
@@ -50,7 +49,6 @@ const cwd = process.cwd()
 const settingsPath = join(cwd, 'settings.json')
 const globalRoot = resolveGlobalRoot()
 
-const configService = createConfigService(globalRoot)
 const claudeSettingsEnvService = createClaudeSettingsEnvService({ homeDir, cwd })
 const settingsEnvService = createSettingsEnvService({ settingsPath })
 const shellEnvService = createShellEnvService({ homeDir })
@@ -307,7 +305,8 @@ presetCommand.command('create').description('Create a new environment preset')
         await app.waitUntilExit()
         return result
       },
-    })(),
+    })({ cwd })
+,
   )
 
 function printBanner() {
