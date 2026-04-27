@@ -235,8 +235,7 @@ program
     })
   )
 
-const presetCommand = program.command('preset').description('Manage environment presets')
-presetCommand
+program
   .command('show')
   .description('List and view all presets')
   .action(
@@ -249,7 +248,8 @@ presetCommand
       }
     })
   )
-presetCommand
+
+program
   .command('delete')
   .description('Delete a saved preset')
   .action(
@@ -271,7 +271,8 @@ presetCommand
       }
     })
   )
-presetCommand
+
+program
   .command('create')
   .description('Create a new environment preset')
   .action(() =>
