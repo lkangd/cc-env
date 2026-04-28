@@ -27,14 +27,21 @@ describe('init flow', () => {
     ).toEqual(['ANTHROPIC_AUTH_TOKEN'])
   })
 
-  it('moves directly from key selection to confirm', () => {
-    const state = createInitFlowState(['ANTHROPIC_AUTH_TOKEN'], ['ANTHROPIC_AUTH_TOKEN'])
+  it('toggles optional keys on and off and handles confirm transition', () => {
+    const base = createInitFlowState(['ANTHROPIC_AUTH_TOKEN', 'EXTRA_KEY'], ['ANTHROPIC_AUTH_TOKEN'])
 
-    expect(advanceInitFlow(state, { type: 'continue' })).toEqual({
-      step: 'confirm',
-      availableKeys: ['ANTHROPIC_AUTH_TOKEN'],
-      requiredKeys: ['ANTHROPIC_AUTH_TOKEN'],
-      selectedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+    const toggledOn = advanceInitFlow(base, { type: 'toggle-key', key: 'EXTRA_KEY' })
+    expect(toggledOn.selectedKeys).toEqual(['ANTHROPIC_AUTH_TOKEN', 'EXTRA_KEY'])
+
+    const toggledOff = advanceInitFlow(toggledOn, { type: 'toggle-key', key: 'EXTRA_KEY' })
+    expect(toggledOff.selectedKeys).toEqual(['ANTHROPIC_AUTH_TOKEN'])
+
+    const confirmState = advanceInitFlow(base, { type: 'continue' })
+    expect(advanceInitFlow(confirmState, { type: 'continue' })).toEqual(confirmState)
+    expect(advanceInitFlow(confirmState, { type: 'confirm' })).toEqual({
+      ...confirmState,
+      step: 'done',
     })
   })
+
 })

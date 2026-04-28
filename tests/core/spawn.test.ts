@@ -44,4 +44,31 @@ describe('spawnCommand', () => {
       exitCode: 1,
     })
   })
+
+  it('rejects with CliError when process exits with non-zero code', async () => {
+    const child = new EventEmitter()
+    spawnMock.mockReturnValue(child)
+
+    const { spawnCommand } = await import('../../src/core/spawn.js')
+    const promise = spawnCommand('node', ['script.js'], process.env)
+
+    child.emit('close', 9, null)
+
+    await expect(promise).rejects.toMatchObject({
+      message: 'Command exited with code 9',
+      exitCode: 9,
+    })
+  })
+
+  it('resolves when process exits with code 0', async () => {
+    const child = new EventEmitter()
+    spawnMock.mockReturnValue(child)
+
+    const { spawnCommand } = await import('../../src/core/spawn.js')
+    const promise = spawnCommand('node', ['script.js'], process.env)
+
+    child.emit('close', 0, null)
+
+    await expect(promise).resolves.toBeUndefined()
+  })
 })

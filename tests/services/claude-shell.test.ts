@@ -87,6 +87,17 @@ describe('Claude settings env service', () => {
     expect(sources[3]!.exists).toBe(false)
   })
 
+  it('throws when settings file contains invalid json', async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'cc-env-home-'))
+    roots.push(homeDir)
+
+    await mkdir(join(homeDir, '.claude'), { recursive: true })
+    await writeFile(join(homeDir, '.claude', 'settings.json'), '{not-json}\n', 'utf8')
+
+    const service = createClaudeSettingsEnvService({ homeDir })
+    await expect(service.read()).rejects.toThrow()
+  })
+
   it('preserves sibling fields when writing updated env values', async () => {
     const homeDir = await mkdtemp(join(tmpdir(), 'cc-env-home-'))
     roots.push(homeDir)
