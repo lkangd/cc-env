@@ -1,4 +1,4 @@
-import { access, mkdtemp, readdir, rm } from 'node:fs/promises'
+import { access, mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -67,9 +67,35 @@ describe('preset service', () => {
     await expect(service.listNames()).resolves.toEqual([])
     await expect(service.read('openai')).rejects.toThrowError(new CliError('Preset not found: openai'))
   })
+
+  it('returns empty list when preset directory is missing and remove is no-op', async () => {
+    const globalRoot = await createTempRoot()
+    const service = createPresetService(globalRoot)
+
+    await expect(service.listNames()).resolves.toEqual([])
+    await expect(service.remove('missing')).resolves.toBeUndefined()
+  })
+
+  it('throws parse error when preset file contains invalid JSON', async () => {
+    const globalRoot = await createTempRoot()
+    const service = createPresetService(globalRoot)
+    const presetPath = service.getPath('broken')
+
+    await mkdir(dirname(presetPath), { recursive: true })
+    await writeFile(presetPath, '{not-json}\n', 'utf8')
+
+    await expect(service.read('broken')).rejects.toThrow()
+  })
 })
 
 describe('history service', () => {
+  it('returns empty list when history directory is missing', async () => {
+    const globalRoot = await createTempRoot()
+    const service = createHistoryService(globalRoot)
+
+    await expect(service.list()).resolves.toEqual([])
+  })
+
   it('writes restore records and lists them with targetName preserved', async () => {
     const globalRoot = await createTempRoot()
     const service = createHistoryService(globalRoot)
@@ -94,6 +120,32 @@ describe('history service', () => {
           OPENAI_API_KEY: 'sk-123',
         },
       },
+    ])
+  })
+
+  it('lists history records in descending timestamp order', async () => {
+    const globalRoot = await createTempRoot()
+    const service = createHistoryService(globalRoot)
+
+    await service.write({
+      action: 'restore',
+      targetType: 'preset',
+      targetName: 'a',
+      timestamp: '2026-04-24T08:00:00.000Z',
+      backup: { A: '1' },
+    })
+    await service.write({
+      action: 'restore',
+      targetType: 'preset',
+      targetName: 'b',
+      timestamp: '2026-04-24T09:00:00.000Z',
+      backup: { B: '2' },
+    })
+
+    const records = await service.list()
+    expect(records.map((r) => r.timestamp)).toEqual([
+      '2026-04-24T09:00:00.000Z',
+      '2026-04-24T08:00:00.000Z',
     ])
   })
 

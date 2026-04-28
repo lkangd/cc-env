@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createShowPresetsCommand } from '../../src/commands/preset/show.js'
+import { createShowPresetsCommand } from '../../../src/commands/preset/show.js'
 
 describe('show presets command', () => {
   it('prints message when no presets exist', async () => {
