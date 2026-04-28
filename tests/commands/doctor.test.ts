@@ -66,6 +66,25 @@ describe('runDoctorCommand', () => {
     expect(projectCheck?.ok).toBe(true)
   })
 
+  it('writes all checks passed summary when everything is healthy', async () => {
+    const root = await createTempRoot()
+    const cwd = join(root, 'project')
+    await mkdir(join(cwd, '.cc-env'), { recursive: true })
+    await writeFile(join(cwd, '.cc-env', 'env.json'), '{}')
+    await mkdir(join(root, '.cc-env', 'presets'), { recursive: true })
+
+    const originalHome = process.env.HOME
+    process.env.HOME = root
+
+    const chunks: string[] = []
+    const stdout = { write: vi.fn((s: string) => { chunks.push(s) }) }
+
+    await runDoctorCommand({ cwd, json: false, stdout })
+
+    expect(chunks.join('')).toContain('All checks passed.')
+    process.env.HOME = originalHome
+  }, 15000)
+
   it('writes human-readable output when json is false', async () => {
     const root = await createTempRoot()
     const cwd = join(root, 'project')

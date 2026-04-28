@@ -154,6 +154,13 @@ describe('restore flow', () => {
         targetType: 'preset',
       }),
     ).toEqual(targetState)
+
+    const brokenConfirmState = {
+      ...targetState,
+      step: 'confirm' as const,
+      targetType: 'preset' as const,
+    }
+    expect(advanceRestoreFlow(brokenConfirmState, { type: 'confirm' })).toEqual(brokenConfirmState)
   })
 
 })

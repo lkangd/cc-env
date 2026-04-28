@@ -27,7 +27,7 @@ describe('init flow', () => {
     ).toEqual(['ANTHROPIC_AUTH_TOKEN'])
   })
 
-  it('toggles optional keys on and off and ignores invalid actions', () => {
+  it('toggles optional keys on and off and handles confirm transition', () => {
     const base = createInitFlowState(['ANTHROPIC_AUTH_TOKEN', 'EXTRA_KEY'], ['ANTHROPIC_AUTH_TOKEN'])
 
     const toggledOn = advanceInitFlow(base, { type: 'toggle-key', key: 'EXTRA_KEY' })
@@ -38,6 +38,10 @@ describe('init flow', () => {
 
     const confirmState = advanceInitFlow(base, { type: 'continue' })
     expect(advanceInitFlow(confirmState, { type: 'continue' })).toEqual(confirmState)
+    expect(advanceInitFlow(confirmState, { type: 'confirm' })).toEqual({
+      ...confirmState,
+      step: 'done',
+    })
   })
 
 })
