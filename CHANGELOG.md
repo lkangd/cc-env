@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.1 (2026-04-28)
+
+### Documentation
+* add README with logo and clean up internal docs
+* add test coverage design spec
+
+### Other Changes
+* merge branch 'test-coverage-100'
+
 ## 1.2.0 (2026-04-28)
 
 ### Features
