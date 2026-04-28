@@ -82,17 +82,30 @@ describe('runDoctorCommand', () => {
     expect(output).toContain('Project env')
   })
 
-  it('sets exitCode to 1 when any check fails', async () => {
+  it('sets exitCode to 1 and reports singular failed check count', async () => {
     const root = await createTempRoot()
     const cwd = join(root, 'project')
     await mkdir(cwd, { recursive: true })
 
+    await mkdir(join(root, '.cc-env'), { recursive: true })
+    await mkdir(join(root, '.cc-env', 'presets'), { recursive: true })
+
+    const originalHome = process.env.HOME
+    process.env.HOME = root
+
     const originalExitCode = process.exitCode
-    const stdout = { write: vi.fn() }
+    const chunks: string[] = []
+    const stdout = { write: vi.fn((s: string) => { chunks.push(s) }) }
 
     await runDoctorCommand({ cwd, json: false, stdout })
 
+    const output = chunks.join('')
+    expect(output).toContain('1 check failed')
     expect(process.exitCode).toBe(1)
+
     process.exitCode = originalExitCode
+    process.env.HOME = originalHome
   })
+
+
 })

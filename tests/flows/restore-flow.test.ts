@@ -137,21 +137,23 @@ describe('restore flow', () => {
     })
   })
 
-  it('keeps the done step unchanged for any later action', () => {
-    const doneState = advanceRestoreFlow(createConfirmState(), { type: 'confirm' })
+  it('keeps state unchanged for invalid transitions and missing target name', () => {
+    const recordState = createRestoreFlowState([restoreRecord])
 
+    expect(advanceRestoreFlow(recordState, { type: 'confirm' })).toEqual(recordState)
+
+    const targetState = advanceRestoreFlow(recordState, {
+      type: 'select-record',
+      timestamp: restoreRecord.timestamp,
+    })
+
+    expect(advanceRestoreFlow(targetState, { type: 'confirm' })).toEqual(targetState)
     expect(
-      advanceRestoreFlow(doneState, {
-        type: 'select-record',
-        timestamp: restoreRecord.timestamp,
-      }),
-    ).toEqual(doneState)
-    expect(
-      advanceRestoreFlow(doneState, {
+      advanceRestoreFlow(targetState, {
         type: 'select-target',
-        targetType: 'settings',
+        targetType: 'preset',
       }),
-    ).toEqual(doneState)
-    expect(advanceRestoreFlow(doneState, { type: 'confirm' })).toEqual(doneState)
+    ).toEqual(targetState)
   })
+
 })
