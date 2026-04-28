@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 (2026-04-28)
+
+### Features
+* add completion, doctor, and preset edit/rename commands
+
 ## 1.1.2 (2026-04-28)
 
 ## 1.1.1 (2026-04-27)
