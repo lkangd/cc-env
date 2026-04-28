@@ -1,7 +1,7 @@
 {
   "name": "@lkangd/cc-env",
   "version": "1.2.0",
-  "description": "",
+  "description": "Manage runtime environment variables for Claude Code",
   "homepage": "https://github.com/lkangd/cc-env#readme",
   "bugs": {
     "url": "https://github.com/lkangd/cc-env/issues"
@@ -17,7 +17,7 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=20.19.2 <21"
+    "node": ">=20.19.2"
   },
   "bin": {
     "cc-env": "dist/cli.js"

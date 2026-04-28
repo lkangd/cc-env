@@ -64,3 +64,6 @@ test-results/
 
 # private configs
 .configs
+
+# docs internal
+docs/superpowers/
