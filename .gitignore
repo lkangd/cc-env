@@ -61,3 +61,6 @@ test-results/
 # temp files
 .tmp/
 .cc-env/
+
+# private configs
+.configs
