@@ -65,11 +65,13 @@ export function createRunCommand({
     args = [],
     dryRun = false,
     yes = false,
+    json = false,
     cwd,
   }: {
     args?: string[]
     dryRun?: boolean
     yes?: boolean
+    json?: boolean
     cwd: string
   }): Promise<void> {
     // Step 0: Check settings files for init-managed keys
@@ -142,6 +144,15 @@ export function createRunCommand({
     }
 
     // Step 6: Print env vars
+    if (json && dryRun) {
+      stdout.write(JSON.stringify({
+        preset: { name: selected.name, source: selected.source },
+        command: [command, ...claudeArgs],
+        env: selected.env
+      }, null, 2) + '\n')
+      return
+    }
+
     const presetKeys = new Set(Object.keys(selected.env))
     const envBlock = formatRunEnvBlock(selected.env, presetKeys)
     stdout.write(`Using preset: ${selected.name} (${selected.source})\n${envBlock}\n\n`)

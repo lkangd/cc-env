@@ -75,16 +75,23 @@ describe('cc-env CLI help', () => {
     expect(stdout).toContain('run')
     expect(stdout).toContain('init')
     expect(stdout).toContain('restore')
-    expect(stdout).toContain('preset')
+    expect(stdout).toContain('show')
+    expect(stdout).toContain('delete')
+    expect(stdout).toContain('create')
+    expect(stdout).toContain('doctor')
+    expect(stdout).toContain('edit')
+    expect(stdout).toContain('rename')
+    expect(stdout).toContain('completion')
   })
 
-  it('shows the preset subcommands in help output', async () => {
-    const { stdout } = await execa('node', ['--import', tsxLoader, cliEntry, 'preset', '--help'], {
+  it('shows global options in --help output', async () => {
+    const { stdout } = await execa('node', ['--import', tsxLoader, cliEntry, '--help'], {
       cwd: repoRoot,
     })
 
-    expect(stdout).toContain('show')
-    expect(stdout).toContain('delete')
+    expect(stdout).toContain('--verbose')
+    expect(stdout).toContain('--quiet')
+    expect(stdout).toContain('--no-interactive')
   })
 
   it('uses real HOME and cwd wiring for dry-run env resolution', async () => {
@@ -129,5 +136,87 @@ describe('cc-env CLI help', () => {
     expect(result.exitCode).toBe(1)
     expect(result.stderr).not.toContain('CliError:')
     expect(result.stderr).toContain('Error:')
+  })
+
+  it('doctor --json outputs valid JSON with check results', async () => {
+    const { homeDir, projectDir } = await createCliFixture()
+
+    const result = await execa(
+      'node',
+      ['--import', tsxLoader, cliEntry, 'doctor', '--json'],
+      {
+        cwd: projectDir,
+        env: { HOME: homeDir },
+        reject: false,
+      },
+    )
+
+    const parsed = JSON.parse(result.stdout)
+    expect(Array.isArray(parsed)).toBe(true)
+    expect(parsed.every((c: unknown) => typeof c === 'object' && c !== null && 'label' in c && 'ok' in c)).toBe(true)
+  })
+
+  it('completion --shell fish outputs fish completion script', async () => {
+    const { stdout } = await execa(
+      'node',
+      ['--import', tsxLoader, cliEntry, 'completion', '--shell', 'fish'],
+      { cwd: repoRoot },
+    )
+
+    expect(stdout).toContain('complete -c cc-env')
+    expect(stdout).toContain("'doctor'")
+  })
+
+  it('completion --shell bash outputs bash completion script', async () => {
+    const { stdout } = await execa(
+      'node',
+      ['--import', tsxLoader, cliEntry, 'completion', '--shell', 'bash'],
+      { cwd: repoRoot },
+    )
+
+    expect(stdout).toContain('_cc_env_completions')
+    expect(stdout).toContain('complete -F _cc_env_completions cc-env')
+  })
+
+  it('run --dry-run --json --yes outputs JSON with preset and command', async () => {
+    const { homeDir, projectDir } = await createCliFixture()
+
+    const result = await execa(
+      'node',
+      ['--import', tsxLoader, cliEntry, 'run', '--dry-run', '--json', '--yes', 'claude'],
+      {
+        cwd: projectDir,
+        env: { HOME: homeDir },
+        reject: false,
+      },
+    )
+
+    expect(result.exitCode).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    // Project preset takes priority when it exists
+    expect(parsed.preset.name).toBeTruthy()
+    expect(parsed.preset.source).toMatch(/^(global|project)$/)
+    expect(parsed.command).toContain('claude')
+    expect(parsed.env).toBeDefined()
+  })
+
+  it('show --json outputs JSON array of presets', async () => {
+    const { homeDir, projectDir } = await createCliFixture()
+
+    const result = await execa(
+      'node',
+      ['--import', tsxLoader, cliEntry, 'show', '--json'],
+      {
+        cwd: projectDir,
+        env: { HOME: homeDir },
+        reject: false,
+      },
+    )
+
+    expect(result.exitCode).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(Array.isArray(parsed)).toBe(true)
+    expect(parsed.length).toBeGreaterThan(0)
+    expect(parsed.every((p: unknown) => typeof p === 'object' && p !== null && 'name' in p && 'source' in p)).toBe(true)
   })
 })

@@ -7,16 +7,21 @@ import figlet from 'figlet'
 import gradient from 'gradient-string'
 
 import { Command } from 'commander'
+import packageJson from '../package.json' with { type: 'json' }
 
 const h = React.createElement
 
 import { createInitCommand } from './commands/init.js'
 import { createPresetCreateCommand } from './commands/preset/create.js'
 import { createDeletePresetCommand } from './commands/preset/delete.js'
+import { createEditPresetCommand } from './commands/preset/edit.js'
+import { createRenamePresetCommand } from './commands/preset/rename.js'
 import { PresetDeleteApp } from './ink/preset-delete-app.js'
+import { PresetEditApp } from './ink/preset-edit-app.js'
 import { createShowPresetsCommand } from './commands/preset/show.js'
 import { createRestoreCommand } from './commands/restore.js'
 import { createRunCommand } from './commands/run.js'
+import { runDoctorCommand } from './commands/doctor.js'
 import { findClaudeExecutable } from './core/find-claude.js'
 import { InitApp } from './ink/init-app.js'
 import { renderEnvSummary } from './ink/summary.js'
@@ -38,7 +43,13 @@ import { createShellEnvService } from './services/shell-env-service.js'
 
 const program = new Command()
 
-program.name('cc-env').description('Manage runtime environment variables for Claude Code')
+program
+  .name('cc-env')
+  .description('Manage runtime environment variables for Claude Code')
+  .version(packageJson.version)
+  .option('--verbose', 'Enable verbose output')
+  .option('--quiet', 'Suppress non-essential output')
+  .option('--no-interactive', 'Disable interactive prompts (equivalent to -y)')
 
 const homeDir = process.env.HOME ?? process.cwd()
 const cwd = process.cwd()
@@ -143,6 +154,7 @@ program
   .description('Run claude with merged environment variables')
   .option('--dry-run', 'Preview the merged env without executing')
   .option('-y, --yes', 'Auto-select the default preset without interactive prompts')
+  .option('--json', 'Output as JSON (only with --dry-run)')
   .action((args, options) => {
     const rawArgs = args ?? []
 
@@ -171,6 +183,7 @@ program
       args: rawArgs,
       dryRun: options.dryRun ?? false,
       yes: options.yes ?? false,
+      json: options.json ?? false,
       cwd
     })
   })
@@ -238,15 +251,20 @@ program
 program
   .command('show')
   .description('List and view all presets')
-  .action(
+  .option('--json', 'Output as JSON')
+  .action((options) =>
     createShowPresetsCommand({
       presetService,
       projectEnvService,
       renderShow: async presets => {
+        if (options.json) {
+          process.stdout.write(JSON.stringify(presets, null, 2) + '\n')
+          return
+        }
         const app = render(h(PresetShowApp, { presets }))
         await app.waitUntilExit()
       }
-    })
+    })()
   )
 
 program
@@ -303,6 +321,51 @@ program
     })({ cwd })
   )
 
+program
+  .command('doctor')
+  .description('Check system health and configuration')
+  .option('--json', 'Output as JSON')
+  .action((options) => runDoctorCommand({ cwd, json: options.json }))
+
+program
+  .command('edit <name>')
+  .description('Edit an existing preset')
+  .action((name) =>
+    createEditPresetCommand({
+      presetService,
+      renderEdit: async (preset) => {
+        let result: { env: Record<string, string>; confirmed: boolean } | undefined
+        const app = render(
+          h(PresetEditApp, {
+            name: preset.name,
+            env: preset.env,
+            onSubmit: (value) => {
+              result = value
+            }
+          })
+        )
+        await app.waitUntilExit()
+        return result
+      }
+    })({ name })
+  )
+
+program
+  .command('rename <from> <to>')
+  .description('Rename a preset')
+  .action((from, to) =>
+    createRenamePresetCommand({ presetService })({ from, to })
+  )
+
+program
+  .command('completion')
+  .description('Generate shell completion script')
+  .option('--shell <shell>', 'Shell type (bash, zsh, fish)', 'bash')
+  .action(async (options) => {
+    const { generateCompletion } = await import('./commands/completion.js')
+    process.stdout.write(generateCompletion(options.shell))
+  })
+
 function printBanner() {
   const banner = figlet.textSync('CC ENV', { font: 'ANSI Shadow' })
   const line = '─'.repeat(48)
@@ -310,8 +373,15 @@ function printBanner() {
   process.stderr.write(`\n${styled}\x1b[2m\n${line}\x1b[0m\n\n`)
 }
 
-program.hook('preAction', () => {
-  printBanner()
+program.hook('preAction', (thisCommand) => {
+  const opts = program.opts<{ quiet?: boolean }>()
+  if (!opts.quiet) printBanner()
+  // propagate --no-interactive as -y to subcommands
+  const globalOpts = program.opts<{ interactive?: boolean }>()
+  if (globalOpts.interactive === false) {
+    const subOpts = thisCommand.opts<{ yes?: boolean }>()
+    if ('yes' in subOpts) thisCommand.setOptionValue('yes', true)
+  }
 })
 
 program.parseAsync(process.argv).catch((error: unknown) => {
@@ -324,7 +394,7 @@ program.parseAsync(process.argv).catch((error: unknown) => {
   if (error && typeof error === 'object' && 'code' in error) {
     const { code, message } = error as { code?: string; message?: string }
 
-    if (code === 'commander.helpDisplayed') {
+    if (code === 'commander.helpDisplayed' || code === 'commander.version') {
       process.exitCode = 0
       return
     }

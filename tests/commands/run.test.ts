@@ -215,4 +215,26 @@ describe('createRunCommand', () => {
       source: 'global',
     })
   })
+
+  it('outputs JSON when --dry-run and --json are both set', async () => {
+    const mocks = createMocks()
+
+    await buildRun(mocks)({ args: ['claude', '--model', 'opus'], dryRun: true, json: true, cwd: '/project' })
+
+    const allOutput = (mocks.stdout.write as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) => c[0]).join('')
+    const parsed = JSON.parse(allOutput)
+
+    expect(parsed.preset).toEqual({ name: 'openai', source: 'global' })
+    expect(parsed.command).toEqual(['claude', '--model', 'opus'])
+    expect(parsed.env).toEqual({ OPENAI_API_KEY: 'sk-1234567890' })
+    expect(mocks.spawnCommand).not.toHaveBeenCalled()
+  })
+
+  it('ignores --json without --dry-run and still spawns', async () => {
+    const mocks = createMocks()
+
+    await buildRun(mocks)({ args: ['claude'], json: true, cwd: '/project' })
+
+    expect(mocks.spawnCommand).toHaveBeenCalled()
+  })
 })
