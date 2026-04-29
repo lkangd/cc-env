@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0 (2026-04-29)
+
+### Code Refactoring
+* extract shared claude required keys and improve preset create flow
+* replace init command with auto-detect bootstrap flow
+
 ## 1.2.1 (2026-04-28)
 
 ### Documentation
