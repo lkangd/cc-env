@@ -7,12 +7,118 @@ import {
 } from '../../src/flows/preset-create-flow.js'
 
 describe('preset create flow', () => {
+  it('starts at detectedPrompt when detected env exists', () => {
+    const state = createPresetCreateFlowState({
+      detectedEnv: {
+        ANTHROPIC_AUTH_TOKEN: 'token',
+        ANTHROPIC_BASE_URL: 'https://api.example.com',
+        OPENAI_API_KEY: 'sk-openai',
+      },
+      requiredKeys: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
+    })
+
+    expect(state.step).toBe('detectedPrompt')
+    expect(state.selectedKeys).toEqual(['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'])
+    expect(state.requiredKeys).toEqual(['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'])
+  })
+
+  it('choosing detected prompt yes advances to detected key selection', () => {
+    const state = createPresetCreateFlowState({
+      detectedEnv: {
+        ANTHROPIC_AUTH_TOKEN: 'token',
+        OPENAI_API_KEY: 'sk-openai',
+      },
+      requiredKeys: ['ANTHROPIC_AUTH_TOKEN'],
+    })
+
+    const next = advancePresetCreateFlow(state, { type: 'accept-detected-prompt' })
+
+    expect(next.step).toBe('detected')
+    expect(next.selectedKeys).toEqual(['ANTHROPIC_AUTH_TOKEN'])
+  })
+
+  it('choosing detected prompt no returns to source selection', () => {
+    const state = createPresetCreateFlowState({
+      detectedEnv: {
+        ANTHROPIC_AUTH_TOKEN: 'token',
+        OPENAI_API_KEY: 'sk-openai',
+      },
+      requiredKeys: ['ANTHROPIC_AUTH_TOKEN'],
+    })
+
+    const next = advancePresetCreateFlow(state, { type: 'reject-detected-prompt' })
+
+    expect(next.step).toBe('source')
+    expect(next.source).toBeUndefined()
+  })
+
+  it('does not deselect a required detected key', () => {
+    const state = createPresetCreateFlowState({
+      detectedEnv: {
+        ANTHROPIC_AUTH_TOKEN: 'token',
+        OPENAI_API_KEY: 'sk-openai',
+      },
+      requiredKeys: ['ANTHROPIC_AUTH_TOKEN'],
+    })
+
+    const next = advancePresetCreateFlow(state, {
+      type: 'toggle-detected-key',
+      key: 'ANTHROPIC_AUTH_TOKEN',
+    })
+
+    expect(next.selectedKeys).toEqual(['ANTHROPIC_AUTH_TOKEN'])
+  })
+
+  it('toggles an optional detected key and confirms into name step', () => {
+    const state = createPresetCreateFlowState({
+      detectedEnv: {
+        ANTHROPIC_AUTH_TOKEN: 'token',
+        OPENAI_API_KEY: 'sk-openai',
+      },
+      requiredKeys: ['ANTHROPIC_AUTH_TOKEN'],
+    })
+
+    const prompted = advancePresetCreateFlow(state, { type: 'accept-detected-prompt' })
+    const toggled = advancePresetCreateFlow(prompted, {
+      type: 'toggle-detected-key',
+      key: 'OPENAI_API_KEY',
+    })
+    const confirmed = advancePresetCreateFlow(toggled, { type: 'confirm-detected-keys' })
+
+    expect(prompted.step).toBe('detected')
+    expect(toggled.selectedKeys).toEqual(['ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY'])
+    expect(confirmed.step).toBe('name')
+    expect(confirmed.source).toBe('detected')
+  })
+
+  it('prompt acceptance preserves later detected key selection behavior', () => {
+    const state = createPresetCreateFlowState({
+      detectedEnv: {
+        ANTHROPIC_AUTH_TOKEN: 'token',
+        OPENAI_API_KEY: 'sk-openai',
+      },
+      requiredKeys: ['ANTHROPIC_AUTH_TOKEN'],
+    })
+
+    const prompted = advancePresetCreateFlow(state, { type: 'accept-detected-prompt' })
+    const toggled = advancePresetCreateFlow(prompted, {
+      type: 'toggle-detected-key',
+      key: 'OPENAI_API_KEY',
+    })
+    const confirmed = advancePresetCreateFlow(toggled, { type: 'confirm-detected-keys' })
+
+    expect(prompted.step).toBe('detected')
+    expect(toggled.selectedKeys).toEqual(['ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY'])
+    expect(confirmed.step).toBe('name')
+  })
+
   it("starts at step 'source' with empty defaults", () => {
     expect(createPresetCreateFlowState()).toEqual({
       step: 'source',
       env: {},
       allKeys: [],
       selectedKeys: [],
+      requiredKeys: [],
       presetName: '',
     })
   })

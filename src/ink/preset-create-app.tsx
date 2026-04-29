@@ -20,6 +20,64 @@ type PresetCreateAppProps = {
   readFile: (filePath: string) => Promise<{ allKeys: string[]; env: EnvMap }>
   globalPresetPath: (name: string) => string
   projectEnvPath: string
+  detectedEnv?: EnvMap
+  requiredKeys?: string[]
+}
+
+function DetectedPromptStep({ cursor }: { cursor: number }) {
+  const options = ['Generate from detected config', 'Choose another source'] as const
+
+  return (
+    <Box flexDirection="column">
+      <Text bold>Detected existing configuration</Text>
+      <Text dimColor>Use the currently detected settings to generate a preset?</Text>
+      <Text dimColor>↑/k ↓/j navigate · enter confirm · q cancel</Text>
+      <Box flexDirection="column" marginTop={1}>
+        {options.map((label, i) => (
+          <Box key={label}>
+            <Text>{i === cursor ? '❯ ' : '  '}</Text>
+            <Text {...(i === cursor ? { color: 'cyan' } : {})}>{label}</Text>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  )
+}
+
+function DetectedKeysStep({
+  keys,
+  selectedKeys,
+  requiredKeys,
+  cursor,
+}: {
+  keys: string[]
+  selectedKeys: string[]
+  requiredKeys: string[]
+  cursor: number
+}) {
+  return (
+    <Box flexDirection="column">
+      <Text bold>Select detected env keys to migrate</Text>
+      <Text dimColor>↑/k ↓/j navigate · space toggle optional keys · enter confirm</Text>
+      <Box flexDirection="column" marginTop={1}>
+        {keys.map((key, i) => {
+          const isSelected = selectedKeys.includes(key)
+          const isRequired = requiredKeys.includes(key)
+          return (
+            <Box key={key}>
+              <Text>{i === cursor ? '❯ ' : '  '}</Text>
+              <Text color={isSelected ? 'green' : ''}>{isSelected ? '[x]' : '[ ]'}</Text>
+              <Text>{isRequired ? ' ! ' : '   '}</Text>
+              <Text> {key}</Text>
+            </Box>
+          )
+        })}
+      </Box>
+      <Box marginTop={1}>
+        <Text dimColor>! required key · q cancel</Text>
+      </Box>
+    </Box>
+  )
 }
 
 function SourceStep({ cursor }: { cursor: number }) {
@@ -162,9 +220,17 @@ export function PresetCreateApp({
   readFile,
   globalPresetPath,
   projectEnvPath,
+  detectedEnv,
+  requiredKeys,
 }: PresetCreateAppProps) {
   const { exit } = useApp()
-  const [state, setState] = useState(createPresetCreateFlowState)
+  const [state, setState] = useState(() =>
+    createPresetCreateFlowState(
+      detectedEnv
+        ? (requiredKeys ? { detectedEnv, requiredKeys } : { detectedEnv })
+        : undefined,
+    ),
+  )
   const [textInput, setTextInput] = useState('')
   const [listCursor, setListCursor] = useState(0)
   const [allKeys, setAllKeys] = useState<string[]>([])
@@ -174,6 +240,63 @@ export function PresetCreateApp({
     if (key.escape) {
       exit()
       return
+    }
+
+    if (state.step === 'detectedPrompt') {
+      if (input === 'q') {
+        exit()
+        return
+      }
+      if (key.upArrow || input === 'k') {
+        setListCursor((c) => Math.max(0, c - 1))
+        return
+      }
+      if (key.downArrow || input === 'j') {
+        setListCursor((c) => Math.min(1, c + 1))
+        return
+      }
+      if (key.return) {
+        setState((s) => advancePresetCreateFlow(
+          s,
+          listCursor === 0
+            ? { type: 'accept-detected-prompt' }
+            : { type: 'reject-detected-prompt' },
+        ))
+        setListCursor(0)
+        setTextInput('')
+        return
+      }
+    }
+
+    if (state.step === 'detected') {
+      if (input === 'q') {
+        exit()
+        return
+      }
+      if (key.upArrow || input === 'k') {
+        setListCursor((c) => Math.max(0, c - 1))
+        return
+      }
+      if (key.downArrow || input === 'j') {
+        setListCursor((c) => Math.min(state.allKeys.length - 1, c + 1))
+        return
+      }
+      if (input === ' ') {
+        const targetKey = state.allKeys[listCursor]
+        if (targetKey) {
+          setState((s) => advancePresetCreateFlow(s, {
+            type: 'toggle-detected-key',
+            key: targetKey,
+          }))
+        }
+        return
+      }
+      if (key.return) {
+        setState((s) => advancePresetCreateFlow(s, { type: 'confirm-detected-keys' }))
+        setListCursor(0)
+        setTextInput('')
+        return
+      }
     }
 
     if (state.step === 'source') {
@@ -408,6 +531,15 @@ export function PresetCreateApp({
 
   return (
     <Box flexDirection="column">
+      {state.step === 'detectedPrompt' && <DetectedPromptStep cursor={listCursor} />}
+      {state.step === 'detected' && (
+        <DetectedKeysStep
+          keys={state.allKeys}
+          selectedKeys={state.selectedKeys}
+          requiredKeys={state.requiredKeys}
+          cursor={listCursor}
+        />
+      )}
       {state.step === 'source' && <SourceStep cursor={listCursor} />}
       {state.step === 'filePath' && (
         <FilePathStep value={textInput} {...(state.error ? { error: state.error } : {})} />

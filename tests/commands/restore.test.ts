@@ -16,6 +16,25 @@ function createMocks() {
 }
 
 describe('createRestoreCommand', () => {
+  it('filters out preset-create history records before rendering restore choices', async () => {
+    const m = createMocks()
+    m.historyService.list.mockResolvedValue([
+      { timestamp: 't1', action: 'preset-create', presetName: 'claude-prod', destination: 'global', migratedKeys: ['A'], sources: [] },
+      { timestamp: 't2', action: 'restore', targetType: 'settings', targetName: 'settings', backup: { B: '2' } },
+    ])
+    m.renderFlow.mockResolvedValue({ confirmed: false })
+
+    const restore = createRestoreCommand(m as any)
+    await restore({ yes: false })
+
+    expect(m.renderFlow).toHaveBeenCalledWith({
+      records: [
+        { timestamp: 't2', action: 'restore', targetType: 'settings', targetName: 'settings', backup: { B: '2' } },
+      ],
+      yes: false,
+    })
+  })
+
   it('throws when selected record is missing', async () => {
     const m = createMocks()
     m.historyService.list.mockResolvedValue([{ timestamp: 't1', action: 'restore', targetType: 'preset', targetName: 'a', backup: {} }])

@@ -90,6 +90,10 @@ async function runRestoreFlow(context: { records: Awaited<ReturnType<typeof hist
       }
     }
 
+    if (firstRecord.action !== 'restore') {
+      return undefined
+    }
+
     const confirmState = advanceRestoreFlow(selectedRecordState, {
       type: 'select-target',
       targetType: firstRecord.targetType,
@@ -297,7 +301,9 @@ program
     createPresetCreateCommand({
       presetService,
       projectEnvService,
-      renderFlow: async () => {
+      claudeSettingsEnvService,
+      historyService,
+      renderFlow: async ({ detectedEnv, requiredKeys }) => {
         let result: React.ComponentProps<typeof PresetCreateApp>['onSubmit'] extends (result: infer TResult) => unknown
           ? TResult | undefined
           : undefined
@@ -311,7 +317,9 @@ program
               return readEnvFile(filePath)
             },
             globalPresetPath: name => presetService.getPath(name),
-            projectEnvPath: join(cwd, '.cc-env', 'env.json')
+            projectEnvPath: join(cwd, '.cc-env', 'env.json'),
+            detectedEnv,
+            requiredKeys,
           })
         )
 

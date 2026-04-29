@@ -120,8 +120,8 @@ describe('createRunCommand', () => {
 
     expect(mocks.findClaude).toHaveBeenCalled()
     expect(mocks.spawnCommand).toHaveBeenCalledWith(
-      '/usr/local/bin/claude',
-      [],
+      process.env.SHELL || '/bin/sh',
+      ['-l', '-c', "'/usr/local/bin/claude'"],
       expect.objectContaining({ OPENAI_API_KEY: 'sk-1234567890' }),
     )
   })
@@ -133,8 +133,8 @@ describe('createRunCommand', () => {
 
     expect(mocks.findClaude).not.toHaveBeenCalled()
     expect(mocks.spawnCommand).toHaveBeenCalledWith(
-      'claude',
-      ['--model', 'opus'],
+      process.env.SHELL || '/bin/sh',
+      ['-l', '-c', "'claude' '--model' 'opus'"],
       expect.objectContaining({ OPENAI_API_KEY: 'sk-1234567890' }),
     )
   })

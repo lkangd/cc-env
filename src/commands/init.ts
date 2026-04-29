@@ -1,21 +1,13 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 
+import { requiredClaudeKeys } from '../core/claude-required-keys.js'
 import { CliError } from '../core/errors.js'
 import { envMapSchema, type EnvMap, type InitHistoryRecord, type SourceEntry } from '../core/schema.js'
 import type { ClaudeSettingsSource } from '../services/claude-settings-env-service.js'
 import type { ShellWriteRecord } from '../services/shell-env-service.js'
 
 const h = React.createElement
-
-const requiredInitKeys = [
-  'ANTHROPIC_AUTH_TOKEN',
-  'ANTHROPIC_BASE_URL',
-  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-  'ANTHROPIC_DEFAULT_OPUS_MODEL',
-  'ANTHROPIC_DEFAULT_SONNET_MODEL',
-  'ANTHROPIC_REASONING_MODEL',
-] as const
 
 type ClaudeSettingsEnvService = {
   read: () => Promise<ClaudeSettingsSource[]>
@@ -76,7 +68,7 @@ export function createInitCommand({
       sources.reduce<Record<string, unknown>>((acc, source) => ({ ...acc, ...source.env }), {}),
     )
     const keys = Object.keys(effectiveEnv).sort()
-    const requiredKeys = requiredInitKeys.filter((key) => key in effectiveEnv)
+    const requiredKeys = requiredClaudeKeys.filter((key) => key in effectiveEnv)
     const sourceFiles = sources.map((s) => s.path)
     const result = await renderFlow({ keys, requiredKeys, yes, sourceFiles })
 

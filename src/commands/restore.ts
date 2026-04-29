@@ -38,6 +38,10 @@ type RestoreFlowResult = {
   targetName?: string
 }
 
+function isRestorableRecord(record: HistoryRecord): boolean {
+  return record.action === 'init' || record.action === 'restore'
+}
+
 export function createRestoreCommand({
   historyService,
   claudeSettingsEnvService,
@@ -65,7 +69,7 @@ export function createRestoreCommand({
   }) => Promise<void>
 }) {
   return async function restore({ yes = false }: { yes?: boolean } = {}): Promise<void> {
-    const records = await historyService.list()
+    const records = (await historyService.list()).filter(isRestorableRecord)
     const result = await renderFlow({ records, yes })
 
     if (!result?.confirmed) {
@@ -106,6 +110,10 @@ export function createRestoreCommand({
         ),
       })
       return
+    }
+
+    if (record.action !== 'restore') {
+      throw new CliError('Restore record type is not supported')
     }
 
     if (result.targetType === 'settings') {

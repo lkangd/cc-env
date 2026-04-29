@@ -32,7 +32,9 @@ export function RestoreApp({
         ? Object.entries(
             activeRecord.action === 'init'
               ? Object.fromEntries(activeRecord.sources.flatMap((s) => Object.entries(s.backup)))
-              : activeRecord.backup,
+              : activeRecord.action === 'restore'
+                ? activeRecord.backup
+                : {},
           ).sort(([left], [right]) => left.localeCompare(right)) as [string, string][]
         : [],
     [activeRecord],
@@ -176,10 +178,12 @@ export function RestoreApp({
                     </Box>
                   ) : null}
                 </Box>
-              ) : (
+              ) : activeRecord?.action === 'restore' ? (
                 <Text dimColor>
-                  Restore to {activeRecord?.targetType === 'preset' ? `preset ${activeRecord.targetName}` : activeRecord?.targetType ?? 'settings'}
+                  Restore to {activeRecord.targetType === 'preset' ? `preset ${activeRecord.targetName}` : activeRecord.targetType}
                 </Text>
+              ) : (
+                <Text dimColor>Unsupported restore history record</Text>
               )}
               <Box flexDirection="column" marginTop={1}>
                 <EnvEntries entries={restoreEntries} />

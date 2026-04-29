@@ -43,9 +43,19 @@ const restoreHistorySchema = z.object({
   targetName: z.string(),
 })
 
+const presetCreateHistorySchema = z.object({
+  timestamp: z.string().datetime({ offset: true }),
+  action: z.literal('preset-create'),
+  presetName: z.string(),
+  destination: z.enum(['global', 'project']),
+  migratedKeys: z.array(envKeySchema),
+  sources: z.array(sourceEntrySchema),
+})
+
 export const historySchema = z.discriminatedUnion('action', [
   initHistorySchema,
   restoreHistorySchema,
+  presetCreateHistorySchema,
 ])
 
 export type EnvMap = z.infer<typeof envMapSchema>

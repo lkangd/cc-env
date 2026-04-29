@@ -1,9 +1,11 @@
 import type { EnvMap } from '../core/schema.js'
 
-export type PresetCreateSource = 'file' | 'manual'
+export type PresetCreateSource = 'detected' | 'file' | 'manual'
 export type PresetCreateDestination = 'global' | 'project'
 
 export type PresetCreateStep =
+  | 'detectedPrompt'
+  | 'detected'
   | 'source'
   | 'filePath'
   | 'keys'
@@ -20,6 +22,7 @@ export type PresetCreateFlowState = {
   env: EnvMap
   allKeys: string[]
   selectedKeys: string[]
+  requiredKeys: string[]
   presetName: string
   destination?: PresetCreateDestination
   error?: string | undefined
@@ -33,7 +36,11 @@ export type PresetCreateFlowResult = Pick<
 }
 
 export type PresetCreateFlowAction =
-  | { type: 'select-source'; source: PresetCreateSource }
+  | { type: 'accept-detected-prompt' }
+  | { type: 'reject-detected-prompt' }
+  | { type: 'toggle-detected-key'; key: string }
+  | { type: 'confirm-detected-keys' }
+  | { type: 'select-source'; source: Extract<PresetCreateSource, 'file' | 'manual'> }
   | { type: 'set-file-path'; filePath: string }
   | { type: 'set-error'; error: string }
   | { type: 'select-keys'; keys: string[]; env: EnvMap }
@@ -43,12 +50,32 @@ export type PresetCreateFlowAction =
   | { type: 'select-destination'; destination: PresetCreateDestination }
   | { type: 'confirm' }
 
-export function createPresetCreateFlowState(): PresetCreateFlowState {
+export function createPresetCreateFlowState(input?: {
+  detectedEnv?: EnvMap
+  requiredKeys?: string[]
+}): PresetCreateFlowState {
+  const detectedEnv = input?.detectedEnv ?? {}
+  const requiredKeys = input?.requiredKeys ?? []
+  const detectedKeys = Object.keys(detectedEnv).sort()
+  const selectedKeys = requiredKeys.filter((key) => key in detectedEnv)
+
+  if (detectedKeys.length > 0) {
+    return {
+      step: 'detectedPrompt',
+      env: detectedEnv,
+      allKeys: detectedKeys,
+      selectedKeys,
+      requiredKeys: selectedKeys,
+      presetName: '',
+    }
+  }
+
   return {
     step: 'source',
     env: {},
     allKeys: [],
     selectedKeys: [],
+    requiredKeys: [],
     presetName: '',
   }
 }
@@ -58,6 +85,47 @@ export function advancePresetCreateFlow(
   action: PresetCreateFlowAction,
 ): PresetCreateFlowState {
   switch (state.step) {
+    case 'detectedPrompt':
+      if (action.type === 'accept-detected-prompt') {
+        return {
+          ...state,
+          step: 'detected',
+        }
+      }
+
+      if (action.type === 'reject-detected-prompt') {
+        const { source: _source, ...rest } = state
+        return {
+          ...rest,
+          step: 'source',
+        }
+      }
+
+      return state
+
+    case 'detected':
+      if (action.type === 'toggle-detected-key') {
+        if (state.requiredKeys.includes(action.key) || !state.allKeys.includes(action.key)) {
+          return state
+        }
+
+        const selectedKeys = state.selectedKeys.includes(action.key)
+          ? state.selectedKeys.filter((key) => key !== action.key)
+          : [...state.selectedKeys, action.key].sort()
+
+        return { ...state, selectedKeys }
+      }
+
+      if (action.type === 'confirm-detected-keys') {
+        return {
+          ...state,
+          step: 'name',
+          source: 'detected',
+        }
+      }
+
+      return state
+
     case 'source':
       if (action.type !== 'select-source') return state
       return {

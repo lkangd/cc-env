@@ -3,11 +3,27 @@ import { extname } from 'node:path'
 
 import { parse as parseYaml } from 'yaml'
 
+import { requiredClaudeKeys } from '../../core/claude-required-keys.js'
 import { CliError } from '../../core/errors.js'
 import { ensureGitignoreEntry } from '../../core/gitignore.js'
-import { type EnvMap } from '../../core/schema.js'
+import { envMapSchema, type EnvMap, type HistoryRecord, type SourceEntry } from '../../core/schema.js'
 import { toProcessEnvMap } from '../../core/process-env.js'
 import type { PresetCreateAppResult } from '../../ink/preset-create-app.js'
+
+type ClaudeSettingsSource = {
+  path: string
+  exists: boolean
+  env: EnvMap
+}
+
+type ClaudeSettingsEnvService = {
+  read: () => Promise<ClaudeSettingsSource[]>
+  write: (sources: Array<{ path: string; env: EnvMap }>) => Promise<void>
+}
+
+type HistoryService = {
+  write: (record: Extract<HistoryRecord, { action: 'preset-create' }>) => Promise<unknown>
+}
 
 type PresetService = {
   write: (preset: {
@@ -57,19 +73,51 @@ export async function readEnvFile(filePath: string): Promise<{ allKeys: string[]
   }
 }
 
+function getDetectedEnv(sources: Array<{ env: EnvMap }>): EnvMap {
+  return toProcessEnvMap(
+    sources.reduce<EnvMap>((acc, source) => ({ ...acc, ...source.env }), {} as EnvMap),
+  )
+}
+
+function omitKeys(env: EnvMap, keys: string[]): EnvMap {
+  return envMapSchema.parse(
+    Object.fromEntries(Object.entries(env).filter(([key]) => !keys.includes(key))),
+  )
+}
+
+function buildSourceBackups(sources: ClaudeSettingsSource[], selectedKeys: string[]): SourceEntry[] {
+  return sources.map((source) => ({
+    file: source.path,
+    backup: envMapSchema.parse(
+      Object.fromEntries(
+        selectedKeys
+          .filter((key) => key in source.env)
+          .map((key) => [key, source.env[key]]),
+      ),
+    ),
+  }))
+}
+
 export function createPresetCreateCommand({
   presetService,
   projectEnvService,
+  claudeSettingsEnvService,
+  historyService,
   renderFlow,
   ensureGitignore = (dir, entry) => ensureGitignoreEntry(dir, entry),
 }: {
   presetService: PresetService
   projectEnvService: ProjectEnvService
-  renderFlow: () => Promise<PresetCreateAppResult | void>
+  claudeSettingsEnvService?: ClaudeSettingsEnvService
+  historyService?: HistoryService
+  renderFlow: (input: { detectedEnv: EnvMap; requiredKeys: string[] }) => Promise<PresetCreateAppResult | void>
   ensureGitignore?: (dir: string, entry: string) => Promise<void>
 }) {
   return async function createPreset({ cwd }: { cwd: string }): Promise<void> {
-    const result = await renderFlow()
+    const sources = claudeSettingsEnvService ? await claudeSettingsEnvService.read() : []
+    const detectedEnv = claudeSettingsEnvService ? getDetectedEnv(sources) : {}
+    const requiredKeys = requiredClaudeKeys.filter((key) => key in detectedEnv)
+    const result = await renderFlow({ detectedEnv, requiredKeys })
 
     if (!result) return
 
@@ -79,18 +127,39 @@ export function createPresetCreateCommand({
     }
 
     const timestamp = new Date().toISOString()
+    const selectedKeys = result.selectedKeys
+    const sourceBackups = result.source === 'detected'
+      ? buildSourceBackups(sources, selectedKeys)
+      : []
 
     if (result.destination === 'project') {
       await projectEnvService.write(selectedEnv, { name: result.presetName, createdAt: timestamp, updatedAt: timestamp })
       await ensureGitignore(cwd, '.cc-env')
-      return
+    } else {
+      await presetService.write({
+        name: result.presetName,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        env: selectedEnv,
+      })
     }
 
-    await presetService.write({
-      name: result.presetName,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      env: selectedEnv,
-    })
+    if (result.source === 'detected' && claudeSettingsEnvService && historyService) {
+      await historyService.write({
+        timestamp,
+        action: 'preset-create',
+        presetName: result.presetName,
+        destination: result.destination,
+        migratedKeys: selectedKeys,
+        sources: sourceBackups,
+      })
+
+      await claudeSettingsEnvService.write(
+        sources.map((source) => ({
+          path: source.path,
+          env: omitKeys(source.env, selectedKeys),
+        })),
+      )
+    }
   }
 }

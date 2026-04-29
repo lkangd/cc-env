@@ -87,6 +87,161 @@ describe('readEnvFile', () => {
 })
 
 describe('createPresetCreateCommand', () => {
+  it('writes detected preset, records history, and removes only selected Claude settings keys', async () => {
+    const presetService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const projectEnvService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const claudeSettingsEnvService = {
+      read: vi.fn().mockResolvedValue([
+        {
+          path: '/home/.claude/settings.json',
+          exists: true,
+          env: {
+            ANTHROPIC_BASE_URL: 'https://api.example.com',
+            OPENAI_API_KEY: 'sk-openai',
+          },
+        },
+        {
+          path: '/home/.claude/settings.local.json',
+          exists: true,
+          env: {
+            ANTHROPIC_AUTH_TOKEN: 'token',
+          },
+        },
+        { path: '/project/.claude/settings.json', exists: false, env: {} },
+        { path: '/project/.claude/settings.local.json', exists: false, env: {} },
+      ]),
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const historyService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const renderFlow = vi.fn().mockResolvedValue({
+      source: 'detected',
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'token',
+        ANTHROPIC_BASE_URL: 'https://api.example.com',
+        OPENAI_API_KEY: 'sk-openai',
+      },
+      selectedKeys: ['ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY'],
+      presetName: 'claude-prod',
+      destination: 'global',
+    })
+
+    const createPreset = createPresetCreateCommand({
+      presetService,
+      projectEnvService,
+      claudeSettingsEnvService,
+      historyService,
+      renderFlow,
+    })
+
+    await createPreset({ cwd: '/project' })
+
+    expect(renderFlow).toHaveBeenCalledWith({
+      detectedEnv: {
+        ANTHROPIC_AUTH_TOKEN: 'token',
+        ANTHROPIC_BASE_URL: 'https://api.example.com',
+        OPENAI_API_KEY: 'sk-openai',
+      },
+      requiredKeys: ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'],
+    })
+    expect(presetService.write).toHaveBeenCalledWith({
+      name: 'claude-prod',
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'token',
+        OPENAI_API_KEY: 'sk-openai',
+      },
+    })
+    expect(historyService.write).toHaveBeenCalledWith({
+      timestamp: expect.any(String),
+      action: 'preset-create',
+      presetName: 'claude-prod',
+      destination: 'global',
+      migratedKeys: ['ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY'],
+      sources: [
+        {
+          file: '/home/.claude/settings.json',
+          backup: { OPENAI_API_KEY: 'sk-openai' },
+        },
+        {
+          file: '/home/.claude/settings.local.json',
+          backup: { ANTHROPIC_AUTH_TOKEN: 'token' },
+        },
+        {
+          file: '/project/.claude/settings.json',
+          backup: {},
+        },
+        {
+          file: '/project/.claude/settings.local.json',
+          backup: {},
+        },
+      ],
+    })
+    expect(claudeSettingsEnvService.write).toHaveBeenCalledWith([
+      {
+        path: '/home/.claude/settings.json',
+        env: { ANTHROPIC_BASE_URL: 'https://api.example.com' },
+      },
+      {
+        path: '/home/.claude/settings.local.json',
+        env: {},
+      },
+      { path: '/project/.claude/settings.json', env: {} },
+      { path: '/project/.claude/settings.local.json', env: {} },
+    ])
+  })
+
+  it('falls back to the normal flow when user rejects detected config env', async () => {
+    const presetService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const projectEnvService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const claudeSettingsEnvService = {
+      read: vi.fn().mockResolvedValue([
+        { path: '/home/.claude/settings.json', exists: true, env: { OPENAI_API_KEY: 'sk-live' } },
+        { path: '/home/.claude/settings.local.json', exists: false, env: {} },
+        { path: '/project/.claude/settings.json', exists: false, env: {} },
+        { path: '/project/.claude/settings.local.json', exists: false, env: {} },
+      ]),
+    }
+    const renderFlow = vi.fn().mockResolvedValue({
+      source: 'manual',
+      env: { MANUAL_KEY: 'manual-value' },
+      selectedKeys: ['MANUAL_KEY'],
+      presetName: 'manual-preset',
+      destination: 'project',
+    })
+    const ensureGitignore = vi.fn().mockResolvedValue(undefined)
+
+    const createPreset = createPresetCreateCommand({
+      presetService,
+      projectEnvService,
+      claudeSettingsEnvService,
+      renderFlow,
+      ensureGitignore,
+    })
+
+    await createPreset({ cwd: '/project' })
+
+    expect(renderFlow).toHaveBeenCalledWith({
+      detectedEnv: { OPENAI_API_KEY: 'sk-live' },
+      requiredKeys: [],
+    })
+    expect(projectEnvService.write).toHaveBeenCalledWith(
+      { MANUAL_KEY: 'manual-value' },
+      { name: 'manual-preset', createdAt: expect.any(String), updatedAt: expect.any(String) },
+    )
+    expect(ensureGitignore).toHaveBeenCalledWith('/project', '.cc-env')
+  })
+
   it('writes to presetService when destination is global', async () => {
     const presetService = {
       write: vi.fn().mockResolvedValue(undefined),
@@ -206,6 +361,47 @@ describe('createPresetCreateCommand', () => {
     await createPreset({ cwd: '/my-project' })
 
     expect(ensureGitignore).not.toHaveBeenCalled()
+  })
+
+  it('does not write history or mutate Claude settings when detected flow is cancelled', async () => {
+    const presetService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const projectEnvService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const claudeSettingsEnvService = {
+      read: vi.fn().mockResolvedValue([
+        {
+          path: '/home/.claude/settings.json',
+          exists: true,
+          env: { ANTHROPIC_AUTH_TOKEN: 'token' },
+        },
+        { path: '/home/.claude/settings.local.json', exists: false, env: {} },
+        { path: '/project/.claude/settings.json', exists: false, env: {} },
+        { path: '/project/.claude/settings.local.json', exists: false, env: {} },
+      ]),
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const historyService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const renderFlow = vi.fn().mockResolvedValue(undefined)
+
+    const createPreset = createPresetCreateCommand({
+      presetService,
+      projectEnvService,
+      claudeSettingsEnvService,
+      historyService,
+      renderFlow,
+    })
+
+    await createPreset({ cwd: '/project' })
+
+    expect(presetService.write).not.toHaveBeenCalled()
+    expect(projectEnvService.write).not.toHaveBeenCalled()
+    expect(historyService.write).not.toHaveBeenCalled()
+    expect(claudeSettingsEnvService.write).not.toHaveBeenCalled()
   })
 
   it('does nothing when renderFlow returns undefined', async () => {

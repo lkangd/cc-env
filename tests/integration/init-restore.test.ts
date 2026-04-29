@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createInitCommand } from '../../src/commands/init.js'
 import { createRestoreCommand } from '../../src/commands/restore.js'
+import { historySchema } from '../../src/core/schema.js'
 
 const globalSettingsPath = '/Users/test/.claude/settings.json'
 const globalSettingsLocalPath = '/Users/test/.claude/settings.local.json'
@@ -10,7 +11,69 @@ const projectSettingsLocalPath = '/project/.claude/settings.local.json'
 
 const allPaths = [globalSettingsPath, globalSettingsLocalPath, projectSettingsPath, projectSettingsLocalPath]
 
+describe('history schema', () => {
+  it('accepts preset-create history records', () => {
+    expect(() =>
+      historySchema.parse({
+        timestamp: '2026-04-29T12:00:00.000Z',
+        action: 'preset-create',
+        presetName: 'claude-prod',
+        destination: 'global',
+        migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+        sources: [
+          {
+            file: globalSettingsPath,
+            backup: { ANTHROPIC_AUTH_TOKEN: 'token' },
+          },
+        ],
+      }),
+    ).not.toThrow()
+  })
+})
+
 describe('createInitCommand', () => {
+  it('continues to pass the shared required Claude keys into init flow', async () => {
+    const claudeSettingsEnvService = {
+      read: vi.fn().mockResolvedValue([
+        { path: globalSettingsPath, exists: true, env: { ANTHROPIC_AUTH_TOKEN: 'token' } },
+        { path: globalSettingsLocalPath, exists: false, env: {} },
+        { path: projectSettingsPath, exists: false, env: {} },
+        { path: projectSettingsLocalPath, exists: false, env: {} },
+      ]),
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const shellEnvService = {
+      write: vi.fn().mockResolvedValue([
+        {
+          shell: 'zsh',
+          filePath: '/Users/test/.zshrc',
+          env: { ANTHROPIC_AUTH_TOKEN: 'token' },
+        },
+      ]),
+    }
+    const historyService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const renderFlow = vi.fn().mockResolvedValue({
+      confirmed: true,
+      selectedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+    })
+
+    const init = createInitCommand({
+      claudeSettingsEnvService,
+      shellEnvService,
+      historyService,
+      renderFlow,
+      renderEnvSummary: vi.fn().mockResolvedValue(undefined),
+    })
+
+    await init({ yes: false })
+
+    expect(renderFlow).toHaveBeenCalledWith(
+      expect.objectContaining({ requiredKeys: ['ANTHROPIC_AUTH_TOKEN'] }),
+    )
+  })
+
   it('migrates effective env from Claude settings into shell blocks and records per-file backups', async () => {
     const claudeSettingsEnvService = {
       read: vi.fn().mockResolvedValue([

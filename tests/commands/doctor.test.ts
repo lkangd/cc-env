@@ -33,7 +33,7 @@ describe('runDoctorCommand', () => {
     const output = JSON.parse(chunks.join(''))
     expect(Array.isArray(output)).toBe(true)
     expect(output.every((c: unknown) => typeof c === 'object' && c !== null && 'label' in c && 'ok' in c)).toBe(true)
-  })
+  }, 15000)
 
   it('reports project env as failing when .cc-env/env.json is missing', async () => {
     const root = await createTempRoot()

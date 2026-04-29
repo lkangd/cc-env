@@ -2,14 +2,7 @@ import { CliError } from '../core/errors.js'
 import { formatRunEnvBlock } from '../core/format.js'
 import type { EnvMap } from '../core/schema.js'
 
-const requiredInitKeys = [
-  'ANTHROPIC_AUTH_TOKEN',
-  'ANTHROPIC_BASE_URL',
-  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-  'ANTHROPIC_DEFAULT_OPUS_MODEL',
-  'ANTHROPIC_DEFAULT_SONNET_MODEL',
-  'ANTHROPIC_REASONING_MODEL',
-] as const
+import { requiredClaudeKeys } from '../core/claude-required-keys.js'
 
 type PresetSelectItem = {
   name: string
@@ -50,7 +43,7 @@ export function createRunCommand({
   findClaude,
   renderPresetSelect,
   spawnCommand,
-  stdout = process.stdout,
+  stdout = process.stdout
 }: {
   claudeSettingsEnvService: ClaudeSettingsEnvService
   presetService: PresetService
@@ -66,7 +59,7 @@ export function createRunCommand({
     dryRun = false,
     yes = false,
     json = false,
-    cwd,
+    cwd
   }: {
     args?: string[]
     dryRun?: boolean
@@ -76,23 +69,18 @@ export function createRunCommand({
   }): Promise<void> {
     // Step 0: Check settings files for init-managed keys
     const sources = await claudeSettingsEnvService.read()
-    const mergedSettingsEnv = sources.reduce<EnvMap>(
-      (acc, s) => ({ ...acc, ...s.env }),
-      {} as EnvMap,
-    )
-    const staleKeys = requiredInitKeys.filter((k) => k in mergedSettingsEnv)
+    const mergedSettingsEnv = sources.reduce<EnvMap>((acc, s) => ({ ...acc, ...s.env }), {} as EnvMap)
+    const staleKeys = requiredClaudeKeys.filter(k => k in mergedSettingsEnv)
     if (staleKeys.length > 0) {
       throw new CliError(
-        `Found init-managed keys in Claude settings:\n\n  ${staleKeys.join(', \n  ')}. \n\n  Run "cc-env init" first.`,
+        `Found init-managed keys in Claude settings:\n\n  ${staleKeys.join(', \n  ')}. \n\n  Run "cc-env init" first.`
       )
     }
 
     // Step 1: Collect all presets (project + global)
     const names = await presetService.listNames()
     const globalPresets = await Promise.all(
-      names.map((name) =>
-        presetService.read(name).then((p) => ({ name, env: p.env, source: 'global' as const })),
-      ),
+      names.map(name => presetService.read(name).then(p => ({ name, env: p.env, source: 'global' as const })))
     )
     const { env: projectEnv, name: projectName } = await projectEnvService.readWithMeta()
     const projectPreset =
@@ -109,9 +97,7 @@ export function createRunCommand({
     const savedRef = await projectStateService.getLastPreset(cwd)
     let defaultIndex = 0
     if (savedRef) {
-      const idx = presets.findIndex(
-        (p) => p.name === savedRef.presetName && p.source === savedRef.source,
-      )
+      const idx = presets.findIndex(p => p.name === savedRef.presetName && p.source === savedRef.source)
       if (idx >= 0) defaultIndex = idx
     } else if (projectPreset.length > 0) {
       defaultIndex = 0
@@ -129,7 +115,7 @@ export function createRunCommand({
     // Step 4: Save selection
     await projectStateService.saveLastPreset(cwd, {
       presetName: selected.name,
-      source: selected.source,
+      source: selected.source
     })
 
     // Step 5: Resolve claude command
@@ -145,11 +131,17 @@ export function createRunCommand({
 
     // Step 6: Print env vars
     if (json && dryRun) {
-      stdout.write(JSON.stringify({
-        preset: { name: selected.name, source: selected.source },
-        command: [command, ...claudeArgs],
-        env: selected.env
-      }, null, 2) + '\n')
+      stdout.write(
+        JSON.stringify(
+          {
+            preset: { name: selected.name, source: selected.source },
+            command: [command, ...claudeArgs],
+            env: selected.env
+          },
+          null,
+          2
+        ) + '\n'
+      )
       return
     }
 
@@ -163,7 +155,10 @@ export function createRunCommand({
       return
     }
 
-    // Step 7: Spawn
-    await spawnCommand(command, claudeArgs, { ...process.env, ...selected.env })
+    // Step 7: Spawn through login shell to use the directory's node version
+    const shell = process.env.SHELL || '/bin/sh'
+    const esc = (s: string) => `'${s.replace(/'/g, "'\\''")}'`
+    const shellCmd = [command, ...claudeArgs].map(esc).join(' ')
+    await spawnCommand(shell, ['-l', '-c', shellCmd], { ...process.env, ...selected.env })
   }
 }
