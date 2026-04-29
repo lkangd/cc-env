@@ -42,6 +42,23 @@ const restoreRecord = {
   },
 }
 
+const presetCreateRecord = {
+  timestamp: '2026-04-26T00:00:00.000Z',
+  action: 'preset-create' as const,
+  projectPath: '/repo',
+  presetName: 'claude-prod',
+  destination: 'global' as const,
+  migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+  sources: [
+    {
+      file: '/repo/.claude/settings.local.json',
+      backup: {
+        ANTHROPIC_AUTH_TOKEN: 'local-token',
+      },
+    },
+  ],
+}
+
 function createConfirmState() {
   const recordState = createRestoreFlowState([restoreRecord])
   const targetState = advanceRestoreFlow(recordState, {
@@ -61,7 +78,38 @@ describe('restore flow', () => {
     expect(createRestoreFlowState([restoreRecord])).toEqual({
       step: 'record',
       records: [restoreRecord],
+      groups: [{ title: 'Other history', start: 0, end: 1 }],
     })
+  })
+
+  it('groups restore records by exact projectPath match', () => {
+    const state = createRestoreFlowState(
+      [
+        {
+          ...presetCreateRecord,
+          timestamp: 'other',
+          projectPath: '/other',
+          presetName: 'other-preset',
+          sources: [{ file: '/other/.claude/settings.json', backup: { A: '1' } }],
+          migratedKeys: ['A'],
+        },
+        {
+          ...presetCreateRecord,
+          timestamp: 'current',
+          projectPath: '/repo',
+          presetName: 'current-preset',
+          sources: [{ file: '/repo/.claude/settings.json', backup: { B: '2' } }],
+          migratedKeys: ['B'],
+        },
+      ],
+      '/repo',
+    )
+
+    expect(state.records.map((record) => record.timestamp)).toEqual(['current', 'other'])
+    expect(state.groups).toEqual([
+      { title: 'Current project', start: 0, end: 1 },
+      { title: 'Other history', start: 1, end: 2 },
+    ])
   })
 
   it('skips target selection for init history entries', () => {
@@ -75,6 +123,7 @@ describe('restore flow', () => {
     ).toEqual({
       step: 'confirm',
       records: [initRecord],
+      groups: [{ title: 'Other history', start: 0, end: 1 }],
       selectedTimestamp: initRecord.timestamp,
     })
   })
@@ -90,7 +139,24 @@ describe('restore flow', () => {
     ).toEqual({
       step: 'target',
       records: [restoreRecord],
+      groups: [{ title: 'Other history', start: 0, end: 1 }],
       selectedTimestamp: restoreRecord.timestamp,
+    })
+  })
+
+  it('moves detected preset history directly from record selection to confirm', () => {
+    const state = createRestoreFlowState([presetCreateRecord], '/repo')
+
+    expect(
+      advanceRestoreFlow(state, {
+        type: 'select-record',
+        timestamp: presetCreateRecord.timestamp,
+      }),
+    ).toEqual({
+      step: 'confirm',
+      records: [presetCreateRecord],
+      groups: [{ title: 'Current project', start: 0, end: 1 }],
+      selectedTimestamp: presetCreateRecord.timestamp,
     })
   })
 
@@ -111,6 +177,7 @@ describe('restore flow', () => {
     expect(confirmState).toEqual({
       step: 'confirm',
       records: [restoreRecord],
+      groups: [{ title: 'Other history', start: 0, end: 1 }],
       selectedTimestamp: restoreRecord.timestamp,
       targetType: 'preset',
       targetName: restoreRecord.targetName,
@@ -118,6 +185,7 @@ describe('restore flow', () => {
     expect(advanceRestoreFlow(confirmState, { type: 'confirm' })).toEqual({
       step: 'done',
       records: [restoreRecord],
+      groups: [{ title: 'Other history', start: 0, end: 1 }],
       selectedTimestamp: restoreRecord.timestamp,
       targetType: 'preset',
       targetName: restoreRecord.targetName,
@@ -133,6 +201,7 @@ describe('restore flow', () => {
     expect(advanceRestoreFlow(confirmState, { type: 'confirm' })).toEqual({
       step: 'done',
       records: [initRecord],
+      groups: [{ title: 'Other history', start: 0, end: 1 }],
       selectedTimestamp: initRecord.timestamp,
     })
   })

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createInitCommand } from '../../src/commands/init.js'
+import { createPresetCreateCommand } from '../../src/commands/preset/create.js'
 import { createRestoreCommand } from '../../src/commands/restore.js'
 import { historySchema } from '../../src/core/schema.js'
 
@@ -12,11 +13,12 @@ const projectSettingsLocalPath = '/project/.claude/settings.local.json'
 const allPaths = [globalSettingsPath, globalSettingsLocalPath, projectSettingsPath, projectSettingsLocalPath]
 
 describe('history schema', () => {
-  it('accepts preset-create history records', () => {
+  it('accepts preset-create history records with projectPath', () => {
     expect(() =>
       historySchema.parse({
         timestamp: '2026-04-29T12:00:00.000Z',
         action: 'preset-create',
+        projectPath: '/project',
         presetName: 'claude-prod',
         destination: 'global',
         migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
@@ -191,6 +193,92 @@ describe('createInitCommand', () => {
       message: 'No Claude settings files were found',
       exitCode: 1,
     })
+  })
+})
+
+describe('detected preset create and restore', () => {
+  it('restores moved keys to the original files after detected preset creation', async () => {
+    let currentSources = [
+      { path: globalSettingsPath, exists: true, env: { SHARED_KEY: 'home' } },
+      { path: globalSettingsLocalPath, exists: true, env: { SHARED_KEY: 'local' } },
+      { path: projectSettingsPath, exists: true, env: {} },
+      { path: projectSettingsLocalPath, exists: true, env: { PROJECT_ONLY: '2' } },
+    ]
+    const historyRecords: Array<ReturnType<typeof historySchema.parse>> = []
+
+    const claudeSettingsEnvService = {
+      read: vi.fn().mockImplementation(async () => currentSources),
+      write: vi.fn().mockImplementation(async (sources) => {
+        currentSources = currentSources.map((source) => {
+          const next = sources.find((entry: { path: string; env: Record<string, string> }) => entry.path === source.path)
+          return next ? { ...source, env: next.env } : source
+        })
+      }),
+    }
+    const historyService = {
+      write: vi.fn().mockImplementation(async (record) => {
+        historyRecords.unshift(historySchema.parse(record))
+      }),
+      list: vi.fn().mockImplementation(async () => historyRecords),
+    }
+
+    await createPresetCreateCommand({
+      presetService: {
+        write: vi.fn().mockResolvedValue(undefined),
+      },
+      projectEnvService: {
+        write: vi.fn().mockResolvedValue(undefined),
+      },
+      claudeSettingsEnvService,
+      historyService: {
+        write: historyService.write,
+      },
+      renderFlow: vi.fn().mockResolvedValue({
+        confirmed: true,
+        source: 'detected',
+        env: { SHARED_KEY: 'local', PROJECT_ONLY: '2' },
+        selectedKeys: ['SHARED_KEY', 'PROJECT_ONLY'],
+        presetName: 'claude-prod',
+        destination: 'global',
+      }),
+    })({ cwd: '/project' })
+
+    expect(currentSources).toEqual([
+      { path: globalSettingsPath, exists: true, env: { SHARED_KEY: 'home' } },
+      { path: globalSettingsLocalPath, exists: true, env: {} },
+      { path: projectSettingsPath, exists: true, env: {} },
+      { path: projectSettingsLocalPath, exists: true, env: {} },
+    ])
+
+    await createRestoreCommand({
+      historyService: {
+        list: historyService.list,
+      },
+      claudeSettingsEnvService,
+      shellEnvService: {
+        removeKeys: vi.fn().mockResolvedValue(undefined),
+      },
+      settingsEnvService: {
+        read: vi.fn(),
+        write: vi.fn(),
+      },
+      presetService: {
+        read: vi.fn(),
+        write: vi.fn(),
+      },
+      renderEnvSummary: vi.fn().mockResolvedValue(undefined),
+      renderFlow: vi.fn().mockResolvedValue({
+        confirmed: true,
+        timestamp: historyRecords[0]?.timestamp,
+      }),
+    })({ yes: false })
+
+    expect(currentSources).toEqual([
+      { path: globalSettingsPath, exists: true, env: { SHARED_KEY: 'home' } },
+      { path: globalSettingsLocalPath, exists: true, env: { SHARED_KEY: 'local' } },
+      { path: projectSettingsPath, exists: true, env: {} },
+      { path: projectSettingsLocalPath, exists: true, env: { PROJECT_ONLY: '2' } },
+    ])
   })
 })
 

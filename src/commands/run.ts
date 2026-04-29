@@ -1,8 +1,9 @@
-import { CliError } from '../core/errors.js'
 import { formatRunEnvBlock } from '../core/format.js'
 import type { EnvMap } from '../core/schema.js'
 
 import { requiredClaudeKeys } from '../core/claude-required-keys.js'
+
+const detectTriggerKeys = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL'] as const
 
 type PresetSelectItem = {
   name: string
@@ -35,6 +36,18 @@ type RenderPresetSelect = (input: {
   defaultIndex: number
 }) => Promise<PresetSelectItem | undefined>
 
+type RunCommandResult =
+  | { status: 'executed' }
+  | {
+      status: 'needs-preset'
+      detectedEnv: EnvMap
+      requiredKeys: string[]
+    }
+
+function getDetectedEnv(sources: Array<{ env: EnvMap }>): EnvMap {
+  return sources.reduce<EnvMap>((acc, source) => ({ ...acc, ...source.env }), {} as EnvMap)
+}
+
 export function createRunCommand({
   claudeSettingsEnvService,
   presetService,
@@ -59,22 +72,27 @@ export function createRunCommand({
     dryRun = false,
     yes = false,
     json = false,
+    skipDetect = false,
     cwd
   }: {
     args?: string[]
     dryRun?: boolean
     yes?: boolean
     json?: boolean
+    skipDetect?: boolean
     cwd: string
-  }): Promise<void> {
-    // Step 0: Check settings files for init-managed keys
+  }): Promise<RunCommandResult | void> {
     const sources = await claudeSettingsEnvService.read()
-    const mergedSettingsEnv = sources.reduce<EnvMap>((acc, s) => ({ ...acc, ...s.env }), {} as EnvMap)
-    const staleKeys = requiredClaudeKeys.filter(k => k in mergedSettingsEnv)
-    if (staleKeys.length > 0) {
-      throw new CliError(
-        `Found init-managed keys in Claude settings:\n\n  ${staleKeys.join(', \n  ')}. \n\n  Run "cc-env init" first.`
-      )
+    const detectedEnv = getDetectedEnv(sources)
+    const requiredKeys = requiredClaudeKeys.filter((key) => key in detectedEnv)
+    const hasDetectTrigger = detectTriggerKeys.some((key) => key in detectedEnv)
+
+    if (!skipDetect && hasDetectTrigger) {
+      return {
+        status: 'needs-preset',
+        detectedEnv,
+        requiredKeys,
+      }
     }
 
     // Step 1: Collect all presets (project + global)
@@ -90,7 +108,11 @@ export function createRunCommand({
 
     const presets = [...projectPreset, ...globalPresets]
     if (presets.length === 0) {
-      throw new CliError('No presets found. Create one with "cc-env preset create".')
+      return {
+        status: 'needs-preset',
+        detectedEnv,
+        requiredKeys,
+      }
     }
 
     // Step 2: Determine default selection
@@ -142,7 +164,7 @@ export function createRunCommand({
           2
         ) + '\n'
       )
-      return
+      return { status: 'executed' }
     }
 
     const presetKeys = new Set(Object.keys(selected.env))
@@ -152,13 +174,11 @@ export function createRunCommand({
     if (dryRun) {
       const preview = [command, ...claudeArgs].join(' ')
       stdout.write(`Would run: ${preview}\n`)
-      return
+      return { status: 'executed' }
     }
 
-    // Step 7: Spawn through login shell to use the directory's node version
-    const shell = process.env.SHELL || '/bin/sh'
-    const esc = (s: string) => `'${s.replace(/'/g, "'\\''")}'`
-    const shellCmd = [command, ...claudeArgs].map(esc).join(' ')
-    await spawnCommand(shell, ['-l', '-c', shellCmd], { ...process.env, ...selected.env })
+    // Step 7: Spawn
+    await spawnCommand(command, claudeArgs, { ...process.env, ...selected.env })
+    return { status: 'executed' }
   }
 }

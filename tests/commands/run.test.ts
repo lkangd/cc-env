@@ -3,7 +3,6 @@ import { rm } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createRunCommand } from '../../src/commands/run.js'
-import { CliError } from '../../src/core/errors.js'
 import type { EnvMap } from '../../src/core/schema.js'
 
 const tempDirs: string[] = []
@@ -71,20 +70,31 @@ function buildRun(mocks: ReturnType<typeof createMocks>) {
 }
 
 describe('createRunCommand', () => {
-  it('throws when init-managed keys found in Claude settings', async () => {
+  it('returns a needs-preset outcome when no preset exists and detected settings are present', async () => {
     const staleSources = emptySettingsSources.map((s, i) =>
       i === 0 ? { ...s, exists: true, env: { ANTHROPIC_AUTH_TOKEN: 'sk-old' } as EnvMap } : s,
     )
     const mocks = createMocks({
       claudeSettingsEnvService: { read: vi.fn().mockResolvedValue(staleSources) },
+      presetService: {
+        listNames: vi.fn().mockResolvedValue([]),
+        read: vi.fn(),
+      },
+      projectEnvService: {
+        readWithMeta: vi.fn().mockResolvedValue({ env: {} as EnvMap }),
+      },
     })
 
-    await expect(buildRun(mocks)({ cwd: '/project' })).rejects.toEqual(
-      new CliError('Found init-managed keys in Claude settings:\n\n  ANTHROPIC_AUTH_TOKEN. \n\n  Run "cc-env init" first.'),
-    )
+    await expect(buildRun(mocks)({ cwd: '/project' })).resolves.toEqual({
+      status: 'needs-preset',
+      detectedEnv: { ANTHROPIC_AUTH_TOKEN: 'sk-old' },
+      requiredKeys: ['ANTHROPIC_AUTH_TOKEN'],
+    })
+    expect(mocks.renderPresetSelect).not.toHaveBeenCalled()
+    expect(mocks.spawnCommand).not.toHaveBeenCalled()
   })
 
-  it('throws when no presets exist', async () => {
+  it('returns a needs-preset outcome with empty detected env when no preset exists and no settings match', async () => {
     const mocks = createMocks({
       presetService: {
         listNames: vi.fn().mockResolvedValue([]),
@@ -95,9 +105,42 @@ describe('createRunCommand', () => {
       },
     })
 
-    await expect(buildRun(mocks)({ cwd: '/project' })).rejects.toEqual(
-      new CliError('No presets found. Create one with "cc-env preset create".'),
+    await expect(buildRun(mocks)({ cwd: '/project' })).resolves.toEqual({
+      status: 'needs-preset',
+      detectedEnv: {},
+      requiredKeys: [],
+    })
+  })
+
+  it('returns a needs-preset outcome before preset selection when detect-minimum keys exist', async () => {
+    const detectedSources = emptySettingsSources.map((s, i) =>
+      i === 1 ? { ...s, exists: true, env: { ANTHROPIC_AUTH_TOKEN: 'token' } as EnvMap } : s,
     )
+    const mocks = createMocks({
+      claudeSettingsEnvService: { read: vi.fn().mockResolvedValue(detectedSources) },
+    })
+
+    await expect(buildRun(mocks)({ cwd: '/project' })).resolves.toEqual({
+      status: 'needs-preset',
+      detectedEnv: { ANTHROPIC_AUTH_TOKEN: 'token' },
+      requiredKeys: ['ANTHROPIC_AUTH_TOKEN'],
+    })
+    expect(mocks.renderPresetSelect).not.toHaveBeenCalled()
+    expect(mocks.spawnCommand).not.toHaveBeenCalled()
+  })
+
+  it('does not trigger detect-first flow for non-minimum detected keys', async () => {
+    const detectedSources = emptySettingsSources.map((s, i) =>
+      i === 1 ? { ...s, exists: true, env: { OPENAI_API_KEY: 'sk-openai' } as EnvMap } : s,
+    )
+    const mocks = createMocks({
+      claudeSettingsEnvService: { read: vi.fn().mockResolvedValue(detectedSources) },
+    })
+
+    await expect(buildRun(mocks)({ cwd: '/project' })).resolves.toEqual({
+      status: 'executed',
+    })
+    expect(mocks.renderPresetSelect).toHaveBeenCalled()
   })
 
   it('returns cleanly when user cancels preset selection', async () => {
@@ -120,8 +163,8 @@ describe('createRunCommand', () => {
 
     expect(mocks.findClaude).toHaveBeenCalled()
     expect(mocks.spawnCommand).toHaveBeenCalledWith(
-      process.env.SHELL || '/bin/sh',
-      ['-l', '-c', "'/usr/local/bin/claude'"],
+      '/usr/local/bin/claude',
+      [],
       expect.objectContaining({ OPENAI_API_KEY: 'sk-1234567890' }),
     )
   })
@@ -133,8 +176,8 @@ describe('createRunCommand', () => {
 
     expect(mocks.findClaude).not.toHaveBeenCalled()
     expect(mocks.spawnCommand).toHaveBeenCalledWith(
-      process.env.SHELL || '/bin/sh',
-      ['-l', '-c', "'claude' '--model' 'opus'"],
+      'claude',
+      ['--model', 'opus'],
       expect.objectContaining({ OPENAI_API_KEY: 'sk-1234567890' }),
     )
   })

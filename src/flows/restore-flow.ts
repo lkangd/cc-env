@@ -2,8 +2,15 @@ import type { HistoryRecord } from '../core/schema.js'
 
 export type RestoreFlowStep = 'record' | 'target' | 'confirm' | 'done'
 
+export type RestoreFlowGroup = {
+  title: 'Current project' | 'Other history'
+  start: number
+  end: number
+}
+
 type BaseRestoreFlowState = {
   records: HistoryRecord[]
+  groups: RestoreFlowGroup[]
   selectedTimestamp?: string
 }
 
@@ -11,6 +18,10 @@ export type RestoreFlowState =
   | ({ step: 'record' } & BaseRestoreFlowState)
   | ({ step: 'target'; selectedTimestamp: string } & BaseRestoreFlowState)
   | ({ step: 'confirm'; selectedTimestamp: string } & BaseRestoreFlowState & (
+      | {
+          targetType?: undefined
+          targetName?: undefined
+        }
       | {
           targetType: 'settings'
         }
@@ -20,6 +31,10 @@ export type RestoreFlowState =
         }
     ))
   | ({ step: 'done'; selectedTimestamp: string } & BaseRestoreFlowState & (
+      | {
+          targetType?: undefined
+          targetName?: undefined
+        }
       | {
           targetType: 'settings'
         }
@@ -43,10 +58,32 @@ export type RestoreFlowAction =
       type: 'confirm'
     }
 
-export function createRestoreFlowState(records: HistoryRecord[]): RestoreFlowState {
+export function createRestoreFlowState(records: HistoryRecord[], cwd?: string): RestoreFlowState {
+  const currentProjectRecords = records
+    .filter((record) => 'projectPath' in record && record.projectPath === cwd)
+    .sort((left, right) => right.timestamp.localeCompare(left.timestamp))
+  const otherHistoryRecords = records
+    .filter((record) => !('projectPath' in record) || record.projectPath !== cwd)
+    .sort((left, right) => right.timestamp.localeCompare(left.timestamp))
+  const orderedRecords = [...currentProjectRecords, ...otherHistoryRecords]
+  const groups: RestoreFlowGroup[] = []
+
+  if (currentProjectRecords.length > 0) {
+    groups.push({ title: 'Current project', start: 0, end: currentProjectRecords.length })
+  }
+
+  if (otherHistoryRecords.length > 0) {
+    groups.push({
+      title: 'Other history',
+      start: currentProjectRecords.length,
+      end: orderedRecords.length,
+    })
+  }
+
   return {
     step: 'record',
-    records,
+    records: orderedRecords,
+    groups,
   }
 }
 
@@ -68,12 +105,12 @@ export function advanceRestoreFlow(
         return state
       }
 
-      if (selectedRecord.action === 'init') {
+      if (selectedRecord.action === 'init' || selectedRecord.action === 'preset-create') {
         return {
           ...state,
           step: 'confirm',
           selectedTimestamp: action.timestamp,
-        } as RestoreFlowState
+        }
       }
 
       return {
@@ -100,16 +137,14 @@ export function advanceRestoreFlow(
         }
       }
 
-      const targetName = action.targetName as string
-
       return {
         ...state,
         step: 'confirm',
         targetType: 'preset',
-        targetName,
+        targetName: action.targetName as string,
       }
 
-    case 'confirm':
+    case 'confirm': {
       if (action.type !== 'confirm' || !state.selectedTimestamp) {
         return state
       }
@@ -118,11 +153,11 @@ export function advanceRestoreFlow(
         (record) => record.timestamp === state.selectedTimestamp,
       )
 
-      if (selectedRecord?.action === 'init') {
+      if (selectedRecord?.action === 'init' || selectedRecord?.action === 'preset-create') {
         return {
           ...state,
           step: 'done',
-        } as RestoreFlowState
+        }
       }
 
       if (!state.targetType) {
@@ -137,6 +172,7 @@ export function advanceRestoreFlow(
         ...state,
         step: 'done',
       }
+    }
 
     case 'done':
       return state

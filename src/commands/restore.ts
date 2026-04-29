@@ -39,7 +39,7 @@ type RestoreFlowResult = {
 }
 
 function isRestorableRecord(record: HistoryRecord): boolean {
-  return record.action === 'init' || record.action === 'restore'
+  return record.action === 'init' || record.action === 'restore' || record.action === 'preset-create'
 }
 
 export function createRestoreCommand({
@@ -104,6 +104,34 @@ export function createRestoreCommand({
         env: mergedBackup,
         fromFiles: record.shellWrites.map((sw) => sw.filePath),
         toFiles: record.sources.map((s) => s.file),
+        footer: h(Box, { flexDirection: 'column' },
+          h(Text, { color: 'green' }, 'Restore complete'),
+          h(Text, { bold: true, color: 'green' }, 'Please restart your terminal for the restored environment variables to take effect.'),
+        ),
+      })
+      return
+    }
+
+    if (record.action === 'preset-create') {
+      const mergedBackup = Object.fromEntries(
+        record.sources.flatMap((source) => Object.entries(source.backup)),
+      )
+      const current = await claudeSettingsEnvService.read()
+
+      await claudeSettingsEnvService.write(
+        current.map((source) => ({
+          path: source.path,
+          env: {
+            ...source.env,
+            ...(record.sources.find((entry) => entry.file === source.path)?.backup ?? {}),
+          },
+        })),
+      )
+
+      await renderEnvSummary({
+        title: `Restored from detected preset ${record.presetName}`,
+        env: mergedBackup,
+        toFiles: record.sources.map((source) => source.file),
         footer: h(Box, { flexDirection: 'column' },
           h(Text, { color: 'green' }, 'Restore complete'),
           h(Text, { bold: true, color: 'green' }, 'Please restart your terminal for the restored environment variables to take effect.'),

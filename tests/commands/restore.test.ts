@@ -16,10 +16,18 @@ function createMocks() {
 }
 
 describe('createRestoreCommand', () => {
-  it('filters out preset-create history records before rendering restore choices', async () => {
+  it('includes preset-create history records in restore choices', async () => {
     const m = createMocks()
     m.historyService.list.mockResolvedValue([
-      { timestamp: 't1', action: 'preset-create', presetName: 'claude-prod', destination: 'global', migratedKeys: ['A'], sources: [] },
+      {
+        timestamp: 't1',
+        action: 'preset-create',
+        projectPath: '/repo',
+        presetName: 'claude-prod',
+        destination: 'global',
+        migratedKeys: ['A'],
+        sources: [{ file: '/repo/.claude/settings.json', backup: { A: '1' } }],
+      },
       { timestamp: 't2', action: 'restore', targetType: 'settings', targetName: 'settings', backup: { B: '2' } },
     ])
     m.renderFlow.mockResolvedValue({ confirmed: false })
@@ -29,6 +37,15 @@ describe('createRestoreCommand', () => {
 
     expect(m.renderFlow).toHaveBeenCalledWith({
       records: [
+        {
+          timestamp: 't1',
+          action: 'preset-create',
+          projectPath: '/repo',
+          presetName: 'claude-prod',
+          destination: 'global',
+          migratedKeys: ['A'],
+          sources: [{ file: '/repo/.claude/settings.json', backup: { A: '1' } }],
+        },
         { timestamp: 't2', action: 'restore', targetType: 'settings', targetName: 'settings', backup: { B: '2' } },
       ],
       yes: false,
@@ -42,6 +59,39 @@ describe('createRestoreCommand', () => {
 
     const restore = createRestoreCommand(m as any)
     await expect(restore({ yes: true })).rejects.toEqual(new CliError('Restore record not found'))
+  })
+
+  it('restores detected preset history directly to its source files', async () => {
+    const m = createMocks()
+    m.historyService.list.mockResolvedValue([
+      {
+        timestamp: 't1',
+        action: 'preset-create',
+        projectPath: '/repo',
+        presetName: 'claude-prod',
+        destination: 'global',
+        migratedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+        sources: [
+          { file: '/home/.claude/settings.json', backup: {} },
+          { file: '/repo/.claude/settings.local.json', backup: { ANTHROPIC_AUTH_TOKEN: 'token' } },
+        ],
+      },
+    ])
+    m.renderFlow.mockResolvedValue({ confirmed: true, timestamp: 't1' })
+    m.claudeSettingsEnvService.read.mockResolvedValue([
+      { path: '/home/.claude/settings.json', exists: true, env: {} },
+      { path: '/repo/.claude/settings.local.json', exists: true, env: {} },
+    ])
+
+    const restore = createRestoreCommand(m as any)
+    await restore({ yes: true })
+
+    expect(m.claudeSettingsEnvService.write).toHaveBeenCalledWith([
+      { path: '/home/.claude/settings.json', env: {} },
+      { path: '/repo/.claude/settings.local.json', env: { ANTHROPIC_AUTH_TOKEN: 'token' } },
+    ])
+    expect(m.settingsEnvService.write).not.toHaveBeenCalled()
+    expect(m.presetService.write).not.toHaveBeenCalled()
   })
 
   it('restores to settings when targetType is settings', async () => {

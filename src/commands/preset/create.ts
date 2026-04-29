@@ -85,16 +85,42 @@ function omitKeys(env: EnvMap, keys: string[]): EnvMap {
   )
 }
 
-function buildSourceBackups(sources: ClaudeSettingsSource[], selectedKeys: string[]): SourceEntry[] {
+function buildSourceBackups(
+  sources: ClaudeSettingsSource[],
+  selectedKeys: string[],
+  selectedEnv: EnvMap,
+): SourceEntry[] {
+  const backups = new Map<string, EnvMap>()
+
+  for (const source of sources) {
+    backups.set(source.path, envMapSchema.parse({}))
+  }
+
+  for (const key of selectedKeys) {
+    for (const source of [...sources].reverse()) {
+      if (!(key in source.env)) {
+        continue
+      }
+
+      if (source.env[key] !== selectedEnv[key]) {
+        continue
+      }
+
+      const current = backups.get(source.path) ?? envMapSchema.parse({})
+      backups.set(
+        source.path,
+        envMapSchema.parse({
+          ...current,
+          [key]: source.env[key],
+        }),
+      )
+      break
+    }
+  }
+
   return sources.map((source) => ({
     file: source.path,
-    backup: envMapSchema.parse(
-      Object.fromEntries(
-        selectedKeys
-          .filter((key) => key in source.env)
-          .map((key) => [key, source.env[key]]),
-      ),
-    ),
+    backup: backups.get(source.path) ?? envMapSchema.parse({}),
   }))
 }
 
@@ -113,7 +139,10 @@ export function createPresetCreateCommand({
   renderFlow: (input: { detectedEnv: EnvMap; requiredKeys: string[] }) => Promise<PresetCreateAppResult | void>
   ensureGitignore?: (dir: string, entry: string) => Promise<void>
 }) {
-  return async function createPreset({ cwd }: { cwd: string }): Promise<void> {
+  return async function createPreset({ cwd }: { cwd: string }): Promise<{
+    presetName: string
+    source: 'global' | 'project'
+  } | void> {
     const sources = claudeSettingsEnvService ? await claudeSettingsEnvService.read() : []
     const detectedEnv = claudeSettingsEnvService ? getDetectedEnv(sources) : {}
     const requiredKeys = requiredClaudeKeys.filter((key) => key in detectedEnv)
@@ -129,7 +158,7 @@ export function createPresetCreateCommand({
     const timestamp = new Date().toISOString()
     const selectedKeys = result.selectedKeys
     const sourceBackups = result.source === 'detected'
-      ? buildSourceBackups(sources, selectedKeys)
+      ? buildSourceBackups(sources, selectedKeys, selectedEnv)
       : []
 
     if (result.destination === 'project') {
@@ -148,6 +177,7 @@ export function createPresetCreateCommand({
       await historyService.write({
         timestamp,
         action: 'preset-create',
+        projectPath: cwd,
         presetName: result.presetName,
         destination: result.destination,
         migratedKeys: selectedKeys,
@@ -157,9 +187,17 @@ export function createPresetCreateCommand({
       await claudeSettingsEnvService.write(
         sources.map((source) => ({
           path: source.path,
-          env: omitKeys(source.env, selectedKeys),
+          env: omitKeys(
+            source.env,
+            Object.keys(sourceBackups.find((entry) => entry.file === source.path)?.backup ?? {}),
+          ),
         })),
       )
+    }
+
+    return {
+      presetName: result.presetName,
+      source: result.destination,
     }
   }
 }

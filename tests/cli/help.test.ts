@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,15 +12,23 @@ const cliEntry = join(repoRoot, 'src/cli.ts')
 
 const tempRoots: string[] = []
 
-async function createCliFixture() {
+async function createCliFixture({
+  withGlobalPreset = true,
+  withProjectPreset = true,
+}: {
+  withGlobalPreset?: boolean
+  withProjectPreset?: boolean
+} = {}) {
   const root = await mkdtemp(join(tmpdir(), 'cc-env-cli-'))
   tempRoots.push(root)
 
   const homeDir = join(root, 'home')
   const projectDir = join(root, 'project')
+  const binDir = join(root, 'bin')
 
   await mkdir(join(homeDir, '.cc-env', 'presets'), { recursive: true })
   await mkdir(join(projectDir, '.cc-env'), { recursive: true })
+  await mkdir(binDir, { recursive: true })
 
   await writeFile(
     join(homeDir, '.cc-env', 'config.json'),
@@ -32,18 +40,22 @@ async function createCliFixture() {
     `${JSON.stringify({}, null, 2)}\n`,
     'utf8',
   )
-  await writeFile(
-    join(homeDir, '.cc-env', 'presets', 'openai.json'),
-    `${JSON.stringify({
-      name: 'openai',
-      createdAt: '2026-04-24T00:00:00.000Z',
-      updatedAt: '2026-04-24T00:00:00.000Z',
-      env: {
-        PRESET_KEY: 'preset',
-      },
-    }, null, 2)}\n`,
-    'utf8',
-  )
+
+  if (withGlobalPreset) {
+    await writeFile(
+      join(homeDir, '.cc-env', 'presets', 'openai.json'),
+      `${JSON.stringify({
+        name: 'openai',
+        createdAt: '2026-04-24T00:00:00.000Z',
+        updatedAt: '2026-04-24T00:00:00.000Z',
+        env: {
+          PRESET_KEY: 'preset',
+        },
+      }, null, 2)}\n`,
+      'utf8',
+    )
+  }
+
   await writeFile(
     join(projectDir, 'settings.json'),
     `${JSON.stringify({
@@ -53,13 +65,20 @@ async function createCliFixture() {
     }, null, 2)}\n`,
     'utf8',
   )
-  await writeFile(
-    join(projectDir, '.cc-env', 'env.json'),
-    `${JSON.stringify({ PROJECT_KEY: 'project' }, null, 2)}\n`,
-    'utf8',
-  )
 
-  return { homeDir, projectDir }
+  if (withProjectPreset) {
+    await writeFile(
+      join(projectDir, '.cc-env', 'env.json'),
+      `${JSON.stringify({ PROJECT_KEY: 'project' }, null, 2)}\n`,
+      'utf8',
+    )
+  }
+
+  const claudePath = join(binDir, 'claude')
+  await writeFile(claudePath, '#!/bin/sh\nexit 0\n', 'utf8')
+  await chmod(claudePath, 0o755)
+
+  return { homeDir, projectDir, binDir }
 }
 
 afterEach(async () => {
@@ -73,7 +92,7 @@ describe('cc-env CLI help', () => {
     })
 
     expect(stdout).toContain('run')
-    expect(stdout).toContain('init')
+    expect(stdout).not.toContain('init')
     expect(stdout).toContain('restore')
     expect(stdout).toContain('show')
     expect(stdout).toContain('delete')
@@ -113,15 +132,55 @@ describe('cc-env CLI help', () => {
     expect(result.stdout).toContain('Would run: claude')
   })
 
-  it('prints CliError messages without stack traces at the top level', async () => {
-    const { homeDir, projectDir } = await createCliFixture()
+  it('routes bare cc-env to run when any preset exists', async () => {
+    const { homeDir, projectDir, binDir } = await createCliFixture({
+      withGlobalPreset: true,
+      withProjectPreset: false,
+    })
 
-    await mkdir(join(projectDir, '.claude'), { recursive: true })
-    await writeFile(
-      join(projectDir, '.claude', 'settings.json'),
-      `${JSON.stringify({ env: { ANTHROPIC_AUTH_TOKEN: 'stale' } }, null, 2)}\n`,
-      'utf8',
+    const result = await execa(
+      'node',
+      ['--import', tsxLoader, cliEntry],
+      {
+        cwd: projectDir,
+        env: {
+          HOME: homeDir,
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        },
+        input: '\n',
+        reject: false,
+      },
     )
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('Using preset: openai (global)')
+  })
+
+  it('shows help for bare cc-env when no preset exists', async () => {
+    const { homeDir, projectDir } = await createCliFixture({
+      withGlobalPreset: false,
+      withProjectPreset: false,
+    })
+
+    const result = await execa(
+      'node',
+      ['--import', tsxLoader, cliEntry],
+      {
+        cwd: projectDir,
+        env: { HOME: homeDir },
+        reject: false,
+      },
+    )
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('Usage: cc-env')
+  })
+
+  it('prints CliError messages without stack traces at the top level', async () => {
+    const { homeDir, projectDir } = await createCliFixture({
+      withGlobalPreset: false,
+      withProjectPreset: false,
+    })
 
     const result = await execa(
       'node',

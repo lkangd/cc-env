@@ -46,6 +46,7 @@ const restoreHistorySchema = z.object({
 const presetCreateHistorySchema = z.object({
   timestamp: z.string().datetime({ offset: true }),
   action: z.literal('preset-create'),
+  projectPath: z.string(),
   presetName: z.string(),
   destination: z.enum(['global', 'project']),
   migratedKeys: z.array(envKeySchema),

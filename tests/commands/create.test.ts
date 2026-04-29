@@ -87,6 +87,51 @@ describe('readEnvFile', () => {
 })
 
 describe('createPresetCreateCommand', () => {
+  it('returns the created preset ref for detected preset creation', async () => {
+    const presetService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const projectEnvService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const claudeSettingsEnvService = {
+      read: vi.fn().mockResolvedValue([
+        {
+          path: '/home/.claude/settings.json',
+          exists: true,
+          env: { ANTHROPIC_AUTH_TOKEN: 'token' },
+        },
+        { path: '/home/.claude/settings.local.json', exists: false, env: {} },
+        { path: '/project/.claude/settings.json', exists: false, env: {} },
+        { path: '/project/.claude/settings.local.json', exists: false, env: {} },
+      ]),
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const historyService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const renderFlow = vi.fn().mockResolvedValue({
+      source: 'detected',
+      env: { ANTHROPIC_AUTH_TOKEN: 'token' },
+      selectedKeys: ['ANTHROPIC_AUTH_TOKEN'],
+      presetName: 'claude-prod',
+      destination: 'global',
+    })
+
+    const createPreset = createPresetCreateCommand({
+      presetService,
+      projectEnvService,
+      claudeSettingsEnvService,
+      historyService,
+      renderFlow,
+    })
+
+    await expect(createPreset({ cwd: '/project' })).resolves.toEqual({
+      presetName: 'claude-prod',
+      source: 'global',
+    })
+  })
+
   it('writes detected preset, records history, and removes only selected Claude settings keys', async () => {
     const presetService = {
       write: vi.fn().mockResolvedValue(undefined),
@@ -161,6 +206,7 @@ describe('createPresetCreateCommand', () => {
     expect(historyService.write).toHaveBeenCalledWith({
       timestamp: expect.any(String),
       action: 'preset-create',
+      projectPath: '/project',
       presetName: 'claude-prod',
       destination: 'global',
       migratedKeys: ['ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY'],
@@ -195,6 +241,94 @@ describe('createPresetCreateCommand', () => {
       { path: '/project/.claude/settings.json', env: {} },
       { path: '/project/.claude/settings.local.json', env: {} },
     ])
+  })
+
+  it('records projectPath and only backs up the file that provided the effective detected value', async () => {
+    const presetService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const projectEnvService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const claudeSettingsEnvService = {
+      read: vi.fn().mockResolvedValue([
+        {
+          path: '/home/.claude/settings.json',
+          exists: true,
+          env: {
+            SHARED_KEY: 'home',
+            HOME_ONLY: '1',
+          },
+        },
+        {
+          path: '/home/.claude/settings.local.json',
+          exists: true,
+          env: {
+            SHARED_KEY: 'local',
+          },
+        },
+        {
+          path: '/project/.claude/settings.json',
+          exists: true,
+          env: {},
+        },
+        {
+          path: '/project/.claude/settings.local.json',
+          exists: true,
+          env: {
+            PROJECT_ONLY: '2',
+          },
+        },
+      ]),
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const historyService = {
+      write: vi.fn().mockResolvedValue(undefined),
+    }
+    const renderFlow = vi.fn().mockResolvedValue({
+      source: 'detected',
+      env: { SHARED_KEY: 'local', PROJECT_ONLY: '2' },
+      selectedKeys: ['PROJECT_ONLY', 'SHARED_KEY'],
+      presetName: 'claude-prod',
+      destination: 'global',
+    })
+
+    const createPreset = createPresetCreateCommand({
+      presetService,
+      projectEnvService,
+      claudeSettingsEnvService,
+      historyService,
+      renderFlow,
+    })
+
+    await createPreset({ cwd: '/project' })
+
+    expect(historyService.write).toHaveBeenCalledWith({
+      timestamp: expect.any(String),
+      action: 'preset-create',
+      projectPath: '/project',
+      presetName: 'claude-prod',
+      destination: 'global',
+      migratedKeys: ['PROJECT_ONLY', 'SHARED_KEY'],
+      sources: [
+        {
+          file: '/home/.claude/settings.json',
+          backup: {},
+        },
+        {
+          file: '/home/.claude/settings.local.json',
+          backup: { SHARED_KEY: 'local' },
+        },
+        {
+          file: '/project/.claude/settings.json',
+          backup: {},
+        },
+        {
+          file: '/project/.claude/settings.local.json',
+          backup: { PROJECT_ONLY: '2' },
+        },
+      ],
+    })
   })
 
   it('falls back to the normal flow when user rejects detected config env', async () => {

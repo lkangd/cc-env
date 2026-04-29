@@ -1,8 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 
+import type { HistoryRecord } from '../core/schema.js'
 import { advanceRestoreFlow, type RestoreFlowState } from '../flows/restore-flow.js'
 import { EnvEntries, EnvSummary } from './summary.js'
+
+export function getRestorePreviewSections(record?: HistoryRecord): Array<{ file: string; entries: [string, string][] }> {
+  if (!record) {
+    return []
+  }
+
+  if (record.action === 'init' || record.action === 'preset-create') {
+    return record.sources
+      .filter((source) => Object.keys(source.backup).length > 0)
+      .map((source) => ({
+        file: source.file,
+        entries: Object.entries(source.backup)
+          .sort(([left], [right]) => left.localeCompare(right)) as [string, string][],
+      }))
+  }
+
+  return []
+}
 
 export function RestoreApp({
   state,
@@ -30,7 +49,7 @@ export function RestoreApp({
     () =>
       activeRecord
         ? Object.entries(
-            activeRecord.action === 'init'
+            activeRecord.action === 'init' || activeRecord.action === 'preset-create'
               ? Object.fromEntries(activeRecord.sources.flatMap((s) => Object.entries(s.backup)))
               : activeRecord.action === 'restore'
                 ? activeRecord.backup
@@ -48,13 +67,7 @@ export function RestoreApp({
     return activeRecord.shellWrites.map((sw) => sw.filePath)
   }, [activeRecord])
 
-  const toFiles = useMemo(() => {
-    if (!activeRecord || activeRecord.action !== 'init') {
-      return []
-    }
-
-    return activeRecord.sources.map((s) => s.file)
-  }, [activeRecord])
+  const previewSections = useMemo(() => getRestorePreviewSections(activeRecord), [activeRecord])
 
   useEffect(() => {
     setCurrentState(state)
@@ -149,45 +162,40 @@ export function RestoreApp({
             <Box flexDirection="column" width={28} marginRight={2}>
               <Text bold color="cyan">History</Text>
               <Box flexDirection="column" marginTop={1}>
-                {currentState.records.map((record, index) => (
-                  <Text key={record.timestamp}>
-                    {index === cursor ? '❯ ' : '  '}
-                    {record.timestamp}
-                  </Text>
+                {currentState.groups.map((group) => (
+                  <Box key={group.title} flexDirection="column" marginBottom={1}>
+                    <Text dimColor>{group.title}</Text>
+                    {currentState.records.slice(group.start, group.end).map((record, index) => {
+                      const actualIndex = group.start + index
+                      return (
+                        <Text key={record.timestamp}>
+                          {actualIndex === cursor ? '❯ ' : '  '}
+                          {record.timestamp}
+                        </Text>
+                      )
+                    })}
+                  </Box>
                 ))}
               </Box>
             </Box>
             <Box flexDirection="column" flexGrow={1} borderStyle="round" borderColor="green" paddingX={1}>
               <Text bold color="green">Preview</Text>
-              {activeRecord?.action === 'init' ? (
-                <Box flexDirection="column">
-                  {fromFiles.length > 0 ? (
-                    <Box flexDirection="column">
-                      <Text dimColor>From:</Text>
-                      {fromFiles.map((file) => (
-                        <Text key={file} color="cyan">  {file}</Text>
-                      ))}
-                    </Box>
-                  ) : null}
-                  {toFiles.length > 0 ? (
-                    <Box flexDirection="column">
-                      <Text dimColor>To:</Text>
-                      {toFiles.map((file) => (
-                        <Text key={file} color="cyan">  {file}</Text>
-                      ))}
-                    </Box>
-                  ) : null}
-                </Box>
-              ) : activeRecord?.action === 'restore' ? (
+              {activeRecord?.action === 'restore' ? (
                 <Text dimColor>
                   Restore to {activeRecord.targetType === 'preset' ? `preset ${activeRecord.targetName}` : activeRecord.targetType}
                 </Text>
-              ) : (
-                <Text dimColor>Unsupported restore history record</Text>
-              )}
-              <Box flexDirection="column" marginTop={1}>
-                <EnvEntries entries={restoreEntries} />
-              </Box>
+              ) : null}
+              {previewSections.map((section) => (
+                <Box key={section.file} flexDirection="column" marginTop={1}>
+                  <Text color="cyan">{section.file}</Text>
+                  <EnvEntries entries={section.entries} />
+                </Box>
+              ))}
+              {previewSections.length === 0 ? (
+                <Box flexDirection="column" marginTop={1}>
+                  <EnvEntries entries={restoreEntries} />
+                </Box>
+              ) : null}
             </Box>
           </Box>
         </>
@@ -206,14 +214,27 @@ export function RestoreApp({
             title="Will restore"
             entries={restoreEntries}
             {...(fromFiles.length > 0 ? { fromFiles } : {})}
-            {...(toFiles.length > 0 ? { toFiles } : {})}
+            toFiles={previewSections.map((section) => section.file)}
           />
         </Box>
       ) : null}
-      {currentState.step === 'confirm' && selectedRecord?.action !== 'init' ? (
+      {currentState.step === 'confirm' && selectedRecord?.action === 'preset-create' ? (
         <Box flexDirection="column" marginTop={1}>
           <Text>
-            Confirm restore from <Text color="cyan">{selectedRecord?.timestamp ?? 'record'}</Text> to{' '}
+            Confirm restore from <Text color="cyan">{selectedRecord.timestamp}</Text>
+          </Text>
+          {previewSections.map((section) => (
+            <Box key={section.file} flexDirection="column" marginTop={1}>
+              <Text color="cyan">{section.file}</Text>
+              <EnvEntries entries={section.entries} />
+            </Box>
+          ))}
+        </Box>
+      ) : null}
+      {currentState.step === 'confirm' && selectedRecord?.action === 'restore' ? (
+        <Box flexDirection="column" marginTop={1}>
+          <Text>
+            Confirm restore from <Text color="cyan">{selectedRecord.timestamp}</Text> to{' '}
             <Text color="green">
               {currentState.targetType === 'preset'
                 ? `preset ${currentState.targetName}`
