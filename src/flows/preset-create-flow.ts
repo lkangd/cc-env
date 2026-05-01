@@ -59,7 +59,7 @@ export function createPresetCreateFlowState(input?: {
   const detectedKeys = Object.keys(detectedEnv).sort()
   const selectedKeys = requiredKeys.filter((key) => key in detectedEnv)
 
-  if (detectedKeys.length > 0) {
+  if (selectedKeys.length > 0) {
     return {
       step: 'detectedPrompt',
       env: detectedEnv,
