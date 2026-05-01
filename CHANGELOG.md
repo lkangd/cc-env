@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.1 (2026-05-01)
+
+### Features
+* add ccenv as an alias for cc-env CLI
+
+### Bug Fixes
+* only enter detected mode when required keys are found
+
+### Code Refactoring
+* extract shared useTextInput hook and TextInputDisplay component
+
 ## 1.3.0 (2026-04-29)
 
 ### Code Refactoring
