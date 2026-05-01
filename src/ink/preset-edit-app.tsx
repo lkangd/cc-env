@@ -2,6 +2,9 @@ import React, { useState } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 import type { EnvMap } from '../core/schema.js'
 
+import { useTextInput } from './hooks/use-text-input.js'
+import { TextInputDisplay } from './components/text-input.js'
+
 type PresetEditAppProps = {
   name: string
   env: EnvMap
@@ -13,7 +16,7 @@ export function PresetEditApp({ name, env: initialEnv, onSubmit }: PresetEditApp
   const [entries, setEntries] = useState<[string, string][]>(Object.entries(initialEnv))
   const [cursor, setCursor] = useState(0)
   const [editing, setEditing] = useState<number | null>(null)
-  const [textInput, setTextInput] = useState('')
+  const textInput = useTextInput()
   const [error, setError] = useState<string | undefined>()
   const [step, setStep] = useState<'list' | 'confirm'>('list')
 
@@ -21,7 +24,7 @@ export function PresetEditApp({ name, env: initialEnv, onSubmit }: PresetEditApp
     if (key.escape || input === 'q') {
       if (editing !== null) {
         setEditing(null)
-        setTextInput('')
+        textInput.reset()
         setError(undefined)
         return
       }
@@ -42,7 +45,7 @@ export function PresetEditApp({ name, env: initialEnv, onSubmit }: PresetEditApp
       if (key.return && entries.length > 0) {
         const entry = entries[cursor]
         if (entry) {
-          setTextInput(`${entry[0]}=${entry[1]}`)
+          textInput.reset(`${entry[0]}=${entry[1]}`)
           setEditing(cursor)
           setError(undefined)
         }
@@ -54,7 +57,7 @@ export function PresetEditApp({ name, env: initialEnv, onSubmit }: PresetEditApp
         return
       }
       if (input === 'a') {
-        setTextInput('')
+        textInput.reset()
         setEditing(entries.length)
         setError(undefined)
         return
@@ -66,18 +69,14 @@ export function PresetEditApp({ name, env: initialEnv, onSubmit }: PresetEditApp
     }
 
     if (editing !== null) {
-      if (key.backspace || key.delete) {
-        setTextInput((v) => v.slice(0, -1))
-        return
-      }
       if (key.return) {
-        const sep = textInput.indexOf('=')
+        const sep = textInput.value.indexOf('=')
         if (sep <= 0) {
           setError('Format must be KEY=VALUE')
           return
         }
-        const k = textInput.slice(0, sep)
-        const v = textInput.slice(sep + 1)
+        const k = textInput.value.slice(0, sep)
+        const v = textInput.value.slice(sep + 1)
         if (!/^[A-Z0-9_]+$/.test(k)) {
           setError('Key must match [A-Z0-9_]+')
           return
@@ -92,14 +91,11 @@ export function PresetEditApp({ name, env: initialEnv, onSubmit }: PresetEditApp
           return next
         })
         setEditing(null)
-        setTextInput('')
+        textInput.reset()
         setError(undefined)
         return
       }
-      if (input && !key.ctrl && !key.meta) {
-        setTextInput((v) => v + input)
-        return
-      }
+      if (textInput.handleKey(input, key)) return
     }
 
     if (step === 'confirm') {
@@ -155,11 +151,7 @@ export function PresetEditApp({ name, env: initialEnv, onSubmit }: PresetEditApp
       {editing !== null && (
         <Box flexDirection="column" marginTop={1}>
           <Text bold>{editing < entries.length ? 'Edit entry' : 'Add entry'}</Text>
-          <Box>
-            <Text dimColor>{'>'} </Text>
-            <Text color="cyan">{textInput}</Text>
-            <Text dimColor>█</Text>
-          </Box>
+          <TextInputDisplay value={textInput.value} cursorPos={textInput.cursorPos} />
           {error ? <Text color="red">{error}</Text> : null}
         </Box>
       )}

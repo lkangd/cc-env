@@ -1,6 +1,9 @@
 import React, { useState } from 'react'
 import { Box, Text, useApp, useInput } from 'ink'
 
+import { useTextInput } from './hooks/use-text-input.js'
+import { TextInputDisplay } from './components/text-input.js'
+
 import {
   advancePresetCreateFlow,
   createPresetCreateFlowState,
@@ -101,14 +104,12 @@ function SourceStep({ cursor }: { cursor: number }) {
   )
 }
 
-function FilePathStep({ value, error }: { value: string; error?: string }) {
+function FilePathStep({ value, cursorPos, error }: { value: string; cursorPos: number; error?: string }) {
   return (
     <Box flexDirection="column">
       <Text bold>Enter file path (.yaml/.yml/.json)</Text>
       <Box marginTop={1}>
-        <Text dimColor>{'>'} </Text>
-        <Text color="cyan">{value}</Text>
-        <Text dimColor>█</Text>
+        <TextInputDisplay value={value} cursorPos={cursorPos} />
       </Box>
       {error ? <Text color="red">{error}</Text> : null}
     </Box>
@@ -150,10 +151,12 @@ function KeysStep({
 function ManualInputStep({
   entries,
   value,
+  cursorPos,
   error,
 }: {
   entries: [string, string][]
   value: string
+  cursorPos: number
   error?: string
 }) {
   return (
@@ -171,24 +174,18 @@ function ManualInputStep({
           ))}
         </Box>
       ) : null}
-      <Box>
-        <Text dimColor>{'>'} </Text>
-        <Text color="cyan">{value}</Text>
-        <Text dimColor>█</Text>
-      </Box>
+      <TextInputDisplay value={value} cursorPos={cursorPos} />
       {error ? <Text color="red">{error}</Text> : null}
     </Box>
   )
 }
 
-function NameStep({ value }: { value: string }) {
+function NameStep({ value, cursorPos }: { value: string; cursorPos: number }) {
   return (
     <Box flexDirection="column">
       <Text bold>Enter preset name</Text>
       <Box marginTop={1}>
-        <Text dimColor>{'>'} </Text>
-        <Text color="cyan">{value}</Text>
-        <Text dimColor>█</Text>
+        <TextInputDisplay value={value} cursorPos={cursorPos} />
       </Box>
     </Box>
   )
@@ -231,7 +228,7 @@ export function PresetCreateApp({
         : undefined,
     ),
   )
-  const [textInput, setTextInput] = useState('')
+  const textInput = useTextInput()
   const [listCursor, setListCursor] = useState(0)
   const [allKeys, setAllKeys] = useState<string[]>([])
   const [fileEnv, setFileEnv] = useState<EnvMap>({})
@@ -263,7 +260,7 @@ export function PresetCreateApp({
             : { type: 'reject-detected-prompt' },
         ))
         setListCursor(0)
-        setTextInput('')
+        textInput.reset()
         return
       }
     }
@@ -294,7 +291,7 @@ export function PresetCreateApp({
       if (key.return) {
         setState((s) => advancePresetCreateFlow(s, { type: 'confirm-detected-keys' }))
         setListCursor(0)
-        setTextInput('')
+        textInput.reset()
         return
       }
     }
@@ -316,7 +313,7 @@ export function PresetCreateApp({
         const source: PresetCreateSource = listCursor === 0 ? 'file' : 'manual'
         setState((s) => advancePresetCreateFlow(s, { type: 'select-source', source }))
         setListCursor(0)
-        setTextInput('')
+        textInput.reset()
         return
       }
     }
@@ -326,14 +323,10 @@ export function PresetCreateApp({
         exit()
         return
       }
-      if (key.backspace || key.delete) {
-        setTextInput((v) => v.slice(0, -1))
-        return
-      }
       if (key.return) {
         void (async () => {
           try {
-            const result = await readFile(textInput)
+            const result = await readFile(textInput.value)
             if (result.allKeys.length === 0) {
               setState((s) => advancePresetCreateFlow(s, {
                 type: 'set-error',
@@ -345,7 +338,7 @@ export function PresetCreateApp({
             setFileEnv(result.env)
             setState((s) => advancePresetCreateFlow(s, {
               type: 'set-file-path',
-              filePath: textInput,
+              filePath: textInput.value,
             }))
             setListCursor(0)
           } catch (err) {
@@ -358,10 +351,7 @@ export function PresetCreateApp({
         })()
         return
       }
-      if (input && !key.ctrl && !key.meta) {
-        setTextInput((v) => v + input)
-        return
-      }
+      if (textInput.handleKey(input, key)) return
     }
 
     if (state.step === 'keys') {
@@ -397,13 +387,13 @@ export function PresetCreateApp({
           keys: state.selectedKeys,
           env: selectedEnv,
         }))
-        setTextInput('')
+        textInput.reset()
         return
       }
     }
 
     if (state.step === 'manualInput') {
-      if (input === 'q' && textInput === '') {
+      if (input === 'q' && textInput.value === '') {
         if (state.selectedKeys.length === 0) {
           setState((s) => advancePresetCreateFlow(s, {
             type: 'set-error',
@@ -412,15 +402,11 @@ export function PresetCreateApp({
           return
         }
         setState((s) => advancePresetCreateFlow(s, { type: 'finish-manual-input' }))
-        setTextInput('')
-        return
-      }
-      if (key.backspace || key.delete) {
-        setTextInput((v) => v.slice(0, -1))
+        textInput.reset()
         return
       }
       if (key.return) {
-        const separatorIndex = textInput.indexOf('=')
+        const separatorIndex = textInput.value.indexOf('=')
         if (separatorIndex <= 0) {
           setState((s) => advancePresetCreateFlow(s, {
             type: 'set-error',
@@ -428,8 +414,8 @@ export function PresetCreateApp({
           }))
           return
         }
-        const k = textInput.slice(0, separatorIndex)
-        const v = textInput.slice(separatorIndex + 1)
+        const k = textInput.value.slice(0, separatorIndex)
+        const v = textInput.value.slice(separatorIndex + 1)
         if (!/^[A-Z0-9_]+$/.test(k)) {
           setState((s) => advancePresetCreateFlow(s, {
             type: 'set-error',
@@ -442,13 +428,10 @@ export function PresetCreateApp({
           key: k,
           value: v,
         }))
-        setTextInput('')
+        textInput.reset()
         return
       }
-      if (input && !key.ctrl && !key.meta) {
-        setTextInput((v) => v + input)
-        return
-      }
+      if (textInput.handleKey(input, key)) return
     }
 
     if (state.step === 'name') {
@@ -456,22 +439,15 @@ export function PresetCreateApp({
         exit()
         return
       }
-      if (key.backspace || key.delete) {
-        setTextInput((v) => v.slice(0, -1))
-        return
-      }
-      if (key.return && textInput.trim().length > 0) {
+      if (key.return && textInput.value.trim().length > 0) {
         setState((s) => advancePresetCreateFlow(s, {
           type: 'set-name',
-          name: textInput.trim(),
+          name: textInput.value.trim(),
         }))
         setListCursor(0)
         return
       }
-      if (input && !key.ctrl && !key.meta) {
-        setTextInput((v) => v + input)
-        return
-      }
+      if (textInput.handleKey(input, key)) return
     }
 
     if (state.step === 'destination') {
@@ -542,7 +518,7 @@ export function PresetCreateApp({
       )}
       {state.step === 'source' && <SourceStep cursor={listCursor} />}
       {state.step === 'filePath' && (
-        <FilePathStep value={textInput} {...(state.error ? { error: state.error } : {})} />
+        <FilePathStep value={textInput.value} cursorPos={textInput.cursorPos} {...(state.error ? { error: state.error } : {})} />
       )}
       {state.step === 'keys' && (
         <KeysStep keys={allKeys} selectedKeys={state.selectedKeys} cursor={listCursor} />
@@ -550,11 +526,12 @@ export function PresetCreateApp({
       {state.step === 'manualInput' && (
         <ManualInputStep
           entries={state.selectedKeys.map((k) => [k, state.env[k] ?? ''] as [string, string])}
-          value={textInput}
+          value={textInput.value}
+          cursorPos={textInput.cursorPos}
           {...(state.error ? { error: state.error } : {})}
         />
       )}
-      {state.step === 'name' && <NameStep value={textInput} />}
+      {state.step === 'name' && <NameStep value={textInput.value} cursorPos={textInput.cursorPos} />}
       {state.step === 'destination' && <DestinationStep cursor={listCursor} />}
       {state.step === 'confirm' && state.destination ? (
         <Box flexDirection="column">
