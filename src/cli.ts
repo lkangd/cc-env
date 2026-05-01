@@ -28,6 +28,7 @@ import { PresetShowApp } from './ink/preset-show-app.js'
 import { RunPresetSelectApp } from './ink/run-preset-select-app.js'
 import { advanceRestoreFlow, createRestoreFlowState } from './flows/restore-flow.js'
 import { RestoreApp } from './ink/restore-app.js'
+import { getCliName } from './core/cli-name.js'
 import { CliError } from './core/errors.js'
 import { resolveGlobalRoot } from './core/paths.js'
 import { spawnCommand } from './core/spawn.js'
@@ -42,7 +43,7 @@ import { createShellEnvService } from './services/shell-env-service.js'
 const program = new Command()
 
 program
-  .name('cc-env')
+  .name(getCliName())
   .description('Manage runtime environment variables for Claude Code')
   .version(packageJson.version)
   .option('--verbose', 'Enable verbose output')
@@ -380,7 +381,7 @@ program
   .option('--shell <shell>', 'Shell type (bash, zsh, fish)', 'bash')
   .action(async (options) => {
     const { generateCompletion } = await import('./commands/completion.js')
-    process.stdout.write(generateCompletion(options.shell))
+    process.stdout.write(generateCompletion(options.shell, getCliName()))
   })
 
 function printBanner() {
@@ -436,7 +437,7 @@ main().catch((error: unknown) => {
       return
     }
 
-    const hint = `  Run "cc-env --help" to see available commands and options.\n`
+    const hint = `  Run "${getCliName()} --help" to see available commands and options.\n`
     const formatted = message?.replace(/^error:\s*/i, '') ?? 'Unknown error'
     process.stderr.write(`\n  Error: ${formatted}\n\n${hint}\n`)
     process.exitCode = 1

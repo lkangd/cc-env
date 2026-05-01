@@ -8,6 +8,7 @@ describe('generateCompletion', () => {
 
     expect(output).toContain('_cc_env_completions')
     expect(output).toContain('complete -F _cc_env_completions cc-env')
+    expect(output).toContain('complete -F _cc_env_completions ccenv')
     expect(output).toContain('run init restore show delete create doctor completion')
   })
 
@@ -16,6 +17,7 @@ describe('generateCompletion', () => {
 
     expect(output).toContain('_cc_env')
     expect(output).toContain('compdef _cc_env cc-env')
+    expect(output).toContain('compdef _cc_env ccenv')
     expect(output).toContain('run')
     expect(output).toContain('doctor')
   })
@@ -24,6 +26,7 @@ describe('generateCompletion', () => {
     const output = generateCompletion('fish')
 
     expect(output).toContain('complete -c cc-env')
+    expect(output).toContain('complete -c ccenv')
     expect(output).toContain("'run'")
     expect(output).toContain("'doctor'")
     expect(output).toContain("'completion'")

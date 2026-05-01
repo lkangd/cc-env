@@ -1,18 +1,18 @@
 const COMMANDS = ['run', 'init', 'restore', 'show', 'delete', 'create', 'doctor', 'completion', '--help', '--version']
 
-export function generateCompletion(shell: string): string {
+export function generateCompletion(shell: string, cliName: 'cc-env' | 'ccenv' = 'cc-env'): string {
   switch (shell) {
     case 'zsh':
-      return generateZsh()
+      return generateZsh(cliName)
     case 'fish':
-      return generateFish()
+      return generateFish(cliName)
     default:
-      return generateBash()
+      return generateBash(cliName)
   }
 }
 
-function generateBash(): string {
-  return `# cc-env bash completion
+function generateBash(cliName: 'cc-env' | 'ccenv'): string {
+  return `# ${cliName} bash completion
 # Add to ~/.bashrc: eval "$(cc-env completion --shell bash)"
 _cc_env_completions() {
   local cur="\${COMP_WORDS[COMP_CWORD]}"
@@ -20,13 +20,14 @@ _cc_env_completions() {
   COMPREPLY=($(compgen -W "$commands" -- "$cur"))
 }
 complete -F _cc_env_completions cc-env
+complete -F _cc_env_completions ccenv
 `
 }
 
-function generateZsh(): string {
+function generateZsh(cliName: 'cc-env' | 'ccenv'): string {
   const cmds = COMMANDS.filter((c) => !c.startsWith('-'))
   const cmdList = cmds.map((c) => `    '${c}'`).join('\n')
-  return `# cc-env zsh completion
+  return `# ${cliName} zsh completion
 # Add to ~/.zshrc: eval "$(cc-env completion --shell zsh)"
 _cc_env() {
   local -a commands
@@ -36,10 +37,11 @@ ${cmdList}
   _describe 'command' commands
 }
 compdef _cc_env cc-env
+compdef _cc_env ccenv
 `
 }
 
-function generateFish(): string {
+function generateFish(cliName: 'cc-env' | 'ccenv'): string {
   const cmds = [
     ['run', 'Run claude with merged environment variables'],
     ['init', 'Initialize cc-env for the current project'],
@@ -50,15 +52,21 @@ function generateFish(): string {
     ['doctor', 'Check system health and configuration'],
     ['completion', 'Generate shell completion script'],
   ]
-  const lines = cmds.map(([cmd, desc]) => `complete -c cc-env -f -n '__fish_use_subcommand' -a '${cmd}' -d '${desc}'`)
-  return `# cc-env fish completion
+  const names = ['cc-env', 'ccenv'] as const
+  const subcommandLines = names.flatMap(name =>
+    cmds.map(([cmd, desc]) => `complete -c ${name} -f -n '__fish_use_subcommand' -a '${cmd}' -d '${desc}'`)
+  )
+  const flagLines = names.flatMap(name => [
+    `complete -c ${name} -l help -d 'Show help'`,
+    `complete -c ${name} -l version -d 'Show version'`,
+    `complete -c ${name} -l json -d 'Output as JSON'`,
+    `complete -c ${name} -l quiet -d 'Suppress non-essential output'`,
+    `complete -c ${name} -l verbose -d 'Enable verbose output'`,
+    `complete -c ${name} -l no-interactive -d 'Disable interactive prompts'`,
+  ])
+  return `# ${cliName} fish completion
 # Add to fish config: cc-env completion --shell fish | source
-${lines.join('\n')}
-complete -c cc-env -l help -d 'Show help'
-complete -c cc-env -l version -d 'Show version'
-complete -c cc-env -l json -d 'Output as JSON'
-complete -c cc-env -l quiet -d 'Suppress non-essential output'
-complete -c cc-env -l verbose -d 'Enable verbose output'
-complete -c cc-env -l no-interactive -d 'Disable interactive prompts'
+${subcommandLines.join('\n')}
+${flagLines.join('\n')}
 `
 }

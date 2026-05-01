@@ -1,6 +1,7 @@
 import { access, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
+import { getCliName } from '../core/cli-name.js'
 import { findClaudeExecutable } from '../core/find-claude.js'
 import { resolveGlobalRoot } from '../core/paths.js'
 
@@ -41,7 +42,7 @@ async function checkClaudeExecutable(): Promise<CheckResult> {
 async function checkProjectEnv(cwd: string): Promise<CheckResult> {
   const path = join(cwd, '.cc-env', 'env.json')
   const ok = await exists(path)
-  return { label: 'Project env (.cc-env/env.json)', ok, detail: ok ? path : 'not initialized — run: cc-env init' }
+  return { label: 'Project env (.cc-env/env.json)', ok, detail: ok ? path : `not initialized — run: ${getCliName()} init` }
 }
 
 function renderCheck(result: CheckResult, json: boolean): string {

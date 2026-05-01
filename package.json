@@ -20,7 +20,8 @@
     "node": ">=20.19.2"
   },
   "bin": {
-    "cc-env": "dist/cli.js"
+    "cc-env": "dist/cli.js",
+    "ccenv": "dist/cli.js"
   },
   "files": [
     "dist",

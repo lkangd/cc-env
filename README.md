@@ -20,6 +20,8 @@
 
 `cc-env` is a CLI tool that lets you define, switch, and restore environment variable configurations for Claude Code — per project or via reusable presets. No more manually editing `settings.json` or juggling `.env` files across workspaces.
 
+> **Alias:** `ccenv` can be used as a shorthand for `cc-env` everywhere (e.g., `ccenv run`, `ccenv create`).
+
 ## Installation
 
 ### via npm
@@ -74,6 +76,8 @@ cc-env run
 ```
 
 ## Shell Completion
+
+> Both `cc-env` and `ccenv` are supported in completion scripts.
 
 ```bash
 # bash

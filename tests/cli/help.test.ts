@@ -223,6 +223,7 @@ describe('cc-env CLI help', () => {
     )
 
     expect(stdout).toContain('complete -c cc-env')
+    expect(stdout).toContain('complete -c ccenv')
     expect(stdout).toContain("'doctor'")
   })
 
@@ -235,6 +236,7 @@ describe('cc-env CLI help', () => {
 
     expect(stdout).toContain('_cc_env_completions')
     expect(stdout).toContain('complete -F _cc_env_completions cc-env')
+    expect(stdout).toContain('complete -F _cc_env_completions ccenv')
   })
 
   it('run --dry-run --json --yes outputs JSON with preset and command', async () => {

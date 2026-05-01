@@ -20,6 +20,8 @@
 
 `cc-env` 是一个 CLI 工具，让你可以为 Claude Code 定义、切换和恢复环境变量配置——支持按项目配置或使用可复用的预设。不再需要手动编辑 `settings.json` 或在不同工作区之间切换 `.env` 文件。
 
+> **别名：** `ccenv` 可以作为 `cc-env` 的简写使用（例如 `ccenv run`、`ccenv create`）。
+
 ## 安装
 
 ### 通过 npm
@@ -74,6 +76,8 @@ cc-env run
 ```
 
 ## Shell 补全
+
+> 补全脚本同时支持 `cc-env` 和 `ccenv`。
 
 ```bash
 # bash
