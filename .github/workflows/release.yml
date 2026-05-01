@@ -35,10 +35,7 @@ jobs:
           TARBALL_NAME="cc-env-${VERSION}.tgz"
           NPM_URL="https://registry.npmjs.org/${PACKAGE_NAME}/-/${TARBALL_NAME}"
 
-          echo "Waiting 5 minutes for npm registry propagation..."
-          sleep 300
-
-          MAX_RETRIES=10
+          MAX_RETRIES=20
           RETRY_INTERVAL=30
 
           for i in $(seq 1 $MAX_RETRIES); do
