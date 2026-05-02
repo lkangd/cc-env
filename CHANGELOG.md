@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.0 (2026-05-02)
+
+### Features
+* add top-level claude command as shortcut for run claude
+* manage presets from show
+
 ## 1.3.1 (2026-05-01)
 
 ### Features
