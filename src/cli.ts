@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { render } from 'ink'
+import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import figlet from 'figlet'
 import gradient from 'gradient-string'
@@ -12,11 +13,6 @@ import packageJson from '../package.json' with { type: 'json' }
 const h = React.createElement
 
 import { createPresetCreateCommand } from './commands/preset/create.js'
-import { createDeletePresetCommand } from './commands/preset/delete.js'
-import { createEditPresetCommand } from './commands/preset/edit.js'
-import { createRenamePresetCommand } from './commands/preset/rename.js'
-import { PresetDeleteApp } from './ink/preset-delete-app.js'
-import { PresetEditApp } from './ink/preset-edit-app.js'
 import { createShowPresetsCommand } from './commands/preset/show.js'
 import { createRestoreCommand } from './commands/restore.js'
 import { createRunCommand } from './commands/run.js'
@@ -24,7 +20,7 @@ import { runDoctorCommand } from './commands/doctor.js'
 import { findClaudeExecutable } from './core/find-claude.js'
 import { renderEnvSummary } from './ink/summary.js'
 import { PresetCreateApp } from './ink/preset-create-app.js'
-import { PresetShowApp } from './ink/preset-show-app.js'
+import { PresetShowApp, type PresetShowAction } from './ink/preset-show-app.js'
 import { RunPresetSelectApp } from './ink/run-preset-select-app.js'
 import { advanceRestoreFlow, createRestoreFlowState } from './flows/restore-flow.js'
 import { RestoreApp } from './ink/restore-app.js'
@@ -62,6 +58,21 @@ const projectEnvService = createProjectEnvService({ cwd })
 const presetService = createPresetService(globalRoot)
 const historyService = createHistoryService(globalRoot)
 const projectStateService = createProjectStateService(globalRoot)
+
+function openDirectory(directoryPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('open', [directoryPath], { stdio: 'ignore' })
+    child.once('error', reject)
+    child.once('exit', (code) => {
+      if (code === 0) {
+        resolve()
+        return
+      }
+
+      reject(new Error(`Failed to open directory: ${directoryPath}`))
+    })
+  })
+}
 
 async function runPresetCreateFlow({ detectedEnv, requiredKeys }: { detectedEnv: Record<string, string>; requiredKeys: string[] }) {
   let result: React.ComponentProps<typeof PresetCreateApp>['onSubmit'] extends (result: infer TResult) => unknown
@@ -292,38 +303,24 @@ program
     createShowPresetsCommand({
       presetService,
       projectEnvService,
+      cwd,
+      openDirectory,
       renderShow: async presets => {
         if (options.json) {
           process.stdout.write(JSON.stringify(presets, null, 2) + '\n')
-          return
+          return { type: 'exit' as const }
         }
-        const app = render(h(PresetShowApp, { presets }))
-        await app.waitUntilExit()
-      }
-    })()
-  )
-
-program
-  .command('delete')
-  .description('Delete a saved preset')
-  .action(
-    createDeletePresetCommand({
-      presetService,
-      projectEnvService,
-      renderDelete: async presets => {
-        let result: (typeof presets)[number] | undefined
-        const app = render(
-          h(PresetDeleteApp, {
-            presets,
-            onSubmit: preset => {
-              result = preset
-            }
-          })
-        )
+        let result: PresetShowAction = { type: 'exit' }
+        const app = render(h(PresetShowApp, {
+          presets,
+          onSubmit: action => {
+            result = action
+          },
+        }))
         await app.waitUntilExit()
         return result
       }
-    })
+    })()
   )
 
 program
@@ -344,36 +341,6 @@ program
   .description('Check system health and configuration')
   .option('--json', 'Output as JSON')
   .action((options) => runDoctorCommand({ cwd, json: options.json }))
-
-program
-  .command('edit <name>')
-  .description('Edit an existing preset')
-  .action((name) =>
-    createEditPresetCommand({
-      presetService,
-      renderEdit: async (preset) => {
-        let result: { env: Record<string, string>; confirmed: boolean } | undefined
-        const app = render(
-          h(PresetEditApp, {
-            name: preset.name,
-            env: preset.env,
-            onSubmit: (value) => {
-              result = value
-            }
-          })
-        )
-        await app.waitUntilExit()
-        return result
-      }
-    })({ name })
-  )
-
-program
-  .command('rename <from> <to>')
-  .description('Rename a preset')
-  .action((from, to) =>
-    createRenamePresetCommand({ presetService })({ from, to })
-  )
 
 program
   .command('completion')
