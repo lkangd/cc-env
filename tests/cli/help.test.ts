@@ -75,7 +75,11 @@ async function createCliFixture({
   }
 
   const claudePath = join(binDir, 'claude')
-  await writeFile(claudePath, '#!/bin/sh\nexit 0\n', 'utf8')
+  await writeFile(
+    claudePath,
+    '#!/bin/sh\nprintf "CLAUDE_ARGS:%s\\n" "$*"\nexit 0\n',
+    'utf8',
+  )
   await chmod(claudePath, 0o755)
 
   return { homeDir, projectDir, binDir }
@@ -174,6 +178,72 @@ describe('cc-env CLI help', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain('Usage: cc-env')
+  })
+
+  it('routes top-level claude args through the run flow', async () => {
+    const { homeDir, projectDir, binDir } = await createCliFixture({
+      withGlobalPreset: true,
+      withProjectPreset: false,
+    })
+
+    const result = await execa(
+      'node',
+      ['--import', tsxLoader, cliEntry, 'claude', '--resume', '57df85eb-38fc-4bf5-8eb1-9bfa88acc549'],
+      {
+        cwd: projectDir,
+        env: {
+          HOME: homeDir,
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        },
+        input: '\n',
+        reject: false,
+      },
+    )
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('Using preset: openai (global)')
+    expect(result.stdout).toContain('CLAUDE_ARGS:--resume 57df85eb-38fc-4bf5-8eb1-9bfa88acc549')
+    expect(result.stderr).not.toContain('unknown command')
+    expect(result.stderr).not.toContain('too many arguments')
+  })
+
+  it('matches explicit run claude output', async () => {
+    const { homeDir, projectDir, binDir } = await createCliFixture({
+      withGlobalPreset: true,
+      withProjectPreset: false,
+    })
+
+    const implicit = await execa(
+      'node',
+      ['--import', tsxLoader, cliEntry, 'claude', '--resume', '57df85eb-38fc-4bf5-8eb1-9bfa88acc549'],
+      {
+        cwd: projectDir,
+        env: {
+          HOME: homeDir,
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        },
+        input: '\n',
+        reject: false,
+      },
+    )
+
+    const explicit = await execa(
+      'node',
+      ['--import', tsxLoader, cliEntry, 'run', '--yes', 'claude', '--resume', '57df85eb-38fc-4bf5-8eb1-9bfa88acc549'],
+      {
+        cwd: projectDir,
+        env: {
+          HOME: homeDir,
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        },
+        reject: false,
+      },
+    )
+
+    expect(implicit.exitCode).toBe(0)
+    expect(explicit.exitCode).toBe(0)
+    expect(implicit.stdout).toBe(explicit.stdout)
+    expect(implicit.stderr).toBe(explicit.stderr)
   })
 
   it('prints CliError messages without stack traces at the top level', async () => {

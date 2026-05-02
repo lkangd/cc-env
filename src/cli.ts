@@ -386,6 +386,13 @@ async function main() {
     return
   }
 
+  if (args[0] === 'claude') {
+    const opts = program.opts<{ quiet?: boolean }>()
+    if (!opts.quiet) printBanner()
+    await runWithBootstrap({ args, yes: !process.stdin.isTTY })
+    return
+  }
+
   await program.parseAsync(process.argv)
 }
 
