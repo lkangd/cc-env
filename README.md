@@ -42,13 +42,10 @@ brew install cc-env
 ## Quick Start
 
 ```bash
-# 1. Initialize cc-env in your project
-cc-env init
-
-# 2. Create a preset with your environment variables
+# 1. Create a preset with your environment variables
 cc-env create
 
-# 3. Run Claude Code with the preset applied
+# 2. Run Claude Code with the preset applied
 cc-env run
 ```
 
@@ -56,14 +53,10 @@ cc-env run
 
 | Command | Description |
 |---|---|
-| `cc-env init` | Initialize cc-env for the current project |
 | `cc-env run [args...]` | Run Claude Code with merged environment variables |
 | `cc-env restore` | Restore environment variables from a previous snapshot |
-| `cc-env show` | List and view all saved presets |
+| `cc-env show` | List, view, edit, rename, and delete presets |
 | `cc-env create` | Create a new environment preset |
-| `cc-env edit <name>` | Edit an existing preset |
-| `cc-env rename <from> <to>` | Rename a preset |
-| `cc-env delete` | Delete a saved preset |
 | `cc-env doctor` | Check system health and configuration |
 | `cc-env completion` | Generate shell completion script |
 

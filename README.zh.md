@@ -42,13 +42,10 @@ brew install cc-env
 ## 快速开始
 
 ```bash
-# 1. 在项目中初始化 cc-env
-cc-env init
-
-# 2. 创建一个包含环境变量的预设
+# 1. 创建一个包含环境变量的预设
 cc-env create
 
-# 3. 使用预设运行 Claude Code
+# 2. 使用预设运行 Claude Code
 cc-env run
 ```
 
@@ -56,14 +53,10 @@ cc-env run
 
 | 命令 | 说明 |
 |---|---|
-| `cc-env init` | 为当前项目初始化 cc-env |
 | `cc-env run [args...]` | 使用合并后的环境变量运行 Claude Code |
 | `cc-env restore` | 从之前的快照恢复环境变量 |
-| `cc-env show` | 列出并查看所有保存的预设 |
+| `cc-env show` | 列出、查看、编辑、重命名和删除预设 |
 | `cc-env create` | 创建新的环境变量预设 |
-| `cc-env edit <name>` | 编辑现有预设 |
-| `cc-env rename <from> <to>` | 重命名预设 |
-| `cc-env delete` | 删除保存的预设 |
 | `cc-env doctor` | 检查系统健康状况和配置 |
 | `cc-env completion` | 生成 shell 补全脚本 |
 
